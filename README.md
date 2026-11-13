@@ -1,8 +1,10 @@
-# Jamie: an AI job application agent
+# Jamie: an AI agent that learns as it goes
 
-Jamie applies to jobs, finds the right people, writes outreach in my voice, and remembers everything across Claude and ChatGPT.
+Jamie doesn't just apply to jobs. He's built to grow like a person: every day his brain holds more, and every task makes him a little smarter.
 
-I built Jamie for my own job search while working full time. He runs as a remote **MCP server** that both Claude and ChatGPT connect to, so work started in one picks up cleanly in the other. A **Claude skill** tells him how to do the work. Every action that matters waits for my yes.
+Jamie has a brain that remembers everything he has done before. Each fact I give him, each answer I approve, and each lesson from a task gets saved. The next day he starts from all of it. He does real work, keeps a memory of the past, and goes wherever I work.
+
+His first job is my job search. He applies to roles, finds the right people, and writes outreach in my voice. Under the hood he is a remote **MCP server** with a shared brain, so Claude and ChatGPT both connect to the same Jamie. Work started in one picks up cleanly in the other. A **Claude skill** tells him how to do the work. Every action that matters waits for my yes.
 
 [![Watch the Jamie walkthrough](docs/thumbnail.png)](docs/jamie-demo.mp4)
 
@@ -19,6 +21,17 @@ I built Jamie for my own job search while working full time. He runs as a remote
 | **Learns as it goes** | Saves facts I give or correct, approved answers for reuse, ATS quirks, email patterns and contacts. |
 | **Works across Claude and ChatGPT** | Shared memory plus a handoff note at the end of every session. |
 | **Weekly summary** | Sends, bounces, Apollo credits, applications, and what Jamie learned. |
+
+## Where Jamie is going
+
+The goal is for Jamie to feel less like a job search tool and more like a person.
+
+- **More context:** his brain keeps growing with every task
+- **More places:** beyond chat apps, into my everyday tools
+- **A voice:** talk to him and hear him answer
+- **More skills:** new kinds of tasks over time
+
+**Today:** Jamie runs in Claude and ChatGPT and handles my job search. Voice and the rest are next.
 
 ## Rules the agent can't bend
 
