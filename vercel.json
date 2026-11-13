@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/:secret/mcp", "destination": "/api/mcp?k=:secret" },
+    { "source": "/:secret/brain", "destination": "/api/mcp?k=:secret&view=brain" },
+    { "source": "/:secret/seed", "destination": "/api/mcp?k=:secret&view=seed" }
+  ]
+}
