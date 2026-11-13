@@ -8,6 +8,26 @@ Jamie is my personal agent. Think of him as a second brain that does the work fo
 
 ▶️ **[Watch the 53-second walkthrough](docs/jamie-demo.mp4)**
 
+## See the code
+
+| File | What it does |
+|---|---|
+| [`src/server.ts`](src/server.ts) | All 26 tools: memory, applications, contacts, emails, guardrails |
+| [`src/brain.ts`](src/brain.ts) | Turns the database into one readable "brain" file |
+| [`src/schema.ts`](src/schema.ts) | The brain's tables and default limits |
+| [`src/http.ts`](src/http.ts) | Secure endpoint for Claude and ChatGPT |
+| [`src/db.ts`](src/db.ts) | Postgres connection and settings |
+| [`skill/SKILL.md`](skill/SKILL.md) | Jamie's rules and workflows for Claude |
+
+A taste: before any email goes out, the server itself checks the limits, so the model can't skip them.
+
+```ts
+server.registerTool("jamie_can_send", {
+  description: "Guardrail check. MUST be called before sending any outreach email.",
+  inputSchema: { contact_id: z.number().int() },
+}, async ({ contact_id }) => ok(await guardrailStatus(contact_id)));
+```
+
 ## What Jamie does for me
 
 | | |
