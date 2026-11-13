@@ -6,10 +6,6 @@ Jamie is my personal agent. Think of him as a second brain that does the work fo
 
 **Jump to:** [See the code](#see-the-code) · [Build your own Jamie](#build-your-own-jamie) · [Architecture](#architecture)
 
-[![Watch the Jamie walkthrough](docs/thumbnail.png)](docs/jamie-demo.mp4)
-
-▶️ **[Watch the 53-second walkthrough](docs/jamie-demo.mp4)**
-
 ## See the code
 
 | File | What it does |
@@ -1674,7 +1670,7 @@ src/brain.ts        Renders the brain as Markdown
 src/seed.ts         One-time seed loader
 src/seedData.ts     Demo seed data (fictional)
 skill/SKILL.md      The Claude skill: Jamie's rules and workflows
-docs/               Walkthrough video and images
+docs/               Images
 ```
 
 ## Run your own
