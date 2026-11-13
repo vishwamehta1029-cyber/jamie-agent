@@ -1,37 +1,49 @@
-# Jamie: an AI agent that learns as it goes
+# Jamie: my personal AI agent and second brain
 
-Jamie doesn't just apply to jobs. He's built to grow like a person: every day his brain holds more, and every task makes him a little smarter.
+Jamie is my personal agent. Think of him as a second brain that does the work for me. He knows me well, remembers everything, and makes my life easier.
 
-Jamie has a brain that remembers everything he has done before. Each fact I give him, each answer I approve, and each lesson from a task gets saved. The next day he starts from all of it. He does real work, keeps a memory of the past, and goes wherever I work.
-
-His first job is my job search. He applies to roles, finds the right people, and writes outreach in my voice. Under the hood he is a remote **MCP server** with a shared brain, so Claude and ChatGPT both connect to the same Jamie. Work started in one picks up cleanly in the other. A **Claude skill** tells him how to do the work. Every action that matters waits for my yes.
+**Agents like Jamie are for people who are lazy and ambitious:** you want big outcomes without doing every small step yourself.
 
 [![Watch the Jamie walkthrough](docs/thumbnail.png)](docs/jamie-demo.mp4)
 
 ▶️ **[Watch the 53-second walkthrough](docs/jamie-demo.mp4)**
 
-## What Jamie does
+## What Jamie does for me
 
 | | |
 |---|---|
 | **Applies to jobs** | Works through my LinkedIn saved jobs. Skips duplicates, picks the right resume, fills factual fields, waits for my OK on custom answers. |
-| **Finds the right people** | Researches the hiring manager or recruiter on the public web, finds the company email format, checks the domain's MX records. |
-| **Writes in my voice** | Drafts outreach in Gmail from my own template, matches the ask to the contact's role, shows me the exact text. |
-| **Watches for bounces** | Checks Gmail at 1 hour and 24 hours. A clean 24 hours confirms the email pattern. Apollo is used only as a last resort. |
-| **Learns as it goes** | Saves facts I give or correct, approved answers for reuse, ATS quirks, email patterns and contacts. |
-| **Works across Claude and ChatGPT** | Shared memory plus a handoff note at the end of every session. |
-| **Weekly summary** | Sends, bounces, Apollo credits, applications, and what Jamie learned. |
+| **Drafts emails** | Writes outreach in Gmail from my own template, in my voice, and shows me the exact text first. |
+| **Sends LinkedIn connection requests** | Reaches out to the right people for each role, with my approval. |
+| **Finds the right people** | Researches hiring managers and recruiters, finds the company email format, checks the domain before sending. |
+| **Keeps track of everything** | Every application, contact, email and bounce, logged as it happens. |
+| **Weekly stats** | Applications, emails sent, bounces, credits used, and what he learned. |
+
+## What Jamie knows about me
+
+Jamie's brain holds only verified information. Nothing is guessed, and I can read all of it anytime.
+
+- **Facts about me:** experience, skills, logistics, verified only
+- **People I've reached out to:** names, roles, emails, outcomes
+- **Jobs I've applied to:** company, role, date, status
+- **Answers I've approved:** reused and adapted next time
+- **My preferences:** tone, formatting, rules he follows
+- **Lessons learned:** quirks of each job portal, mistakes to avoid
+
+Every task adds to this brain, so Jamie gets better at helping me every day.
+
+## How he works
+
+Jamie is a remote **MCP server** with one shared brain in Postgres. Claude and ChatGPT both connect to the same Jamie, so work started in one picks up cleanly in the other. A **Claude skill** tells him how to do the work. Every action that matters waits for my yes.
 
 ## Where Jamie is going
-
-The goal is for Jamie to feel less like a job search tool and more like a person.
 
 - **More context:** his brain keeps growing with every task
 - **More places:** beyond chat apps, into my everyday tools
 - **A voice:** talk to him and hear him answer
 - **More skills:** new kinds of tasks over time
 
-**Today:** Jamie runs in Claude and ChatGPT and handles my job search. Voice and the rest are next.
+**Today:** Jamie runs in Claude and ChatGPT and handles my job search and outreach. Voice and the rest are next.
 
 ## Rules the agent can't bend
 
