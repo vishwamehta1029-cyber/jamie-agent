@@ -4,6 +4,10 @@ Jamie is my personal agent. Think of him as a second brain that does the work fo
 
 **Agents like Jamie are for people who are lazy and ambitious:** you want big outcomes without doing every small step yourself.
 
+[![Watch Jamie in 57 seconds](docs/thumbnail.png)](docs/jamie-demo.mp4)
+
+▶️ **[Watch Jamie in 57 seconds](docs/jamie-demo.mp4)**
+
 **Jump to:** [See the code](#see-the-code) · [Build your own Jamie](#build-your-own-jamie) · [Architecture](#architecture)
 
 ## See the code
@@ -1670,7 +1674,7 @@ src/brain.ts        Renders the brain as Markdown
 src/seed.ts         One-time seed loader
 src/seedData.ts     Demo seed data (fictional)
 skill/SKILL.md      The Claude skill: Jamie's rules and workflows
-docs/               Images
+docs/               Demo video and images
 ```
 
 ## Run your own
