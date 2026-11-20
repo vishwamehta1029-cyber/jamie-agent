@@ -123,7 +123,9 @@ INSERT INTO settings (key, value) VALUES
   ('daily_send_limit', '250'),
   ('max_patterns_per_person', '2'),
   ('max_years_experience', '3'),
-  ('guessing_paused', 'false')
+  ('guessing_paused', 'false'),
+  ('scout_max_age_hours', '24'),
+  ('scout_exclude_agencies', 'true')
 ON CONFLICT (key) DO NOTHING;
 DELETE FROM settings WHERE key IN ('weekly_bounce_cap', 'weekly_bounce_rate_pct', 'min_sends_for_rate');
 
@@ -198,5 +200,60 @@ CREATE TABLE IF NOT EXISTS pl_ideas (
   reason TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Scout: finds, filters and ranks job postings
+CREATE TABLE IF NOT EXISTS scout_runs (
+  id SERIAL PRIMARY KEY,
+  sources TEXT[] NOT NULL DEFAULT '{}',
+  query TEXT,
+  status TEXT NOT NULL DEFAULT 'running',
+  notes TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS jobs (
+  id SERIAL PRIMARY KEY,
+  run_id INT REFERENCES scout_runs(id),
+  source TEXT NOT NULL,
+  external_id TEXT,
+  url TEXT NOT NULL,
+  company TEXT NOT NULL,
+  real_employer TEXT,
+  role TEXT NOT NULL,
+  location TEXT,
+  work_mode TEXT,
+  posted_at TIMESTAMPTZ,
+  is_repost BOOLEAN,
+  repost_proof TEXT,
+  min_years NUMERIC,
+  years_quote TEXT,
+  requires_cs_degree BOOLEAN NOT NULL DEFAULT FALSE,
+  swe_focused BOOLEAN NOT NULL DEFAULT FALSE,
+  is_agency BOOLEAN NOT NULL DEFAULT FALSE,
+  hiring_manager TEXT,
+  salary_min INT,
+  salary_max INT,
+  skills TEXT[] NOT NULL DEFAULT '{}',
+  signals JSONB NOT NULL DEFAULT '{}'::jsonb,
+  fit_score NUMERIC,
+  fit_reason TEXT,
+  resume TEXT,
+  flags TEXT[] NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'shortlisted',
+  reject_reasons TEXT[] NOT NULL DEFAULT '{}',
+  application_id INT REFERENCES applications(id),
+  qa_checked BOOLEAN NOT NULL DEFAULT FALSE,
+  qa_result TEXT,
+  found_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS jobs_source_ext_idx ON jobs (source, external_id) WHERE external_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs (status, fit_score DESC);
+CREATE INDEX IF NOT EXISTS jobs_company_idx ON jobs (lower(company));
+CREATE TABLE IF NOT EXISTS job_skills (
+  job_id INT NOT NULL REFERENCES jobs(id),
+  skill TEXT NOT NULL,
+  PRIMARY KEY (job_id, skill)
 );
 `;
