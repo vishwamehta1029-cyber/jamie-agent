@@ -15,9 +15,18 @@ export const STYLIST_SEED = [
    "phone": "508-654-2959",
    "location": "Seattle, WA",
    "links": [
-    "linkedin.com/in/vishwa10",
-    "github.com/vishwamehta1029-cyber",
-    "vishwamehta.vercel.app"
+    {
+     "label": "Portfolio",
+     "url": "https://vishwamehta.vercel.app/"
+    },
+    {
+     "label": "LinkedIn",
+     "url": "https://www.linkedin.com/in/vishwa10"
+    },
+    {
+     "label": "GitHub",
+     "url": "https://github.com/vishwamehta1029-cyber"
+    }
    ]
   },
   "fact_ids": [
@@ -39,7 +48,7 @@ export const STYLIST_SEED = [
    "resume:fde"
   ],
   "content": {
-   "text": "Forward Deployed Engineer who builds and deploys production GenAI applications (agentic workflows, RAG systems, tool-using agents) in Python, integrating Claude and GPT via APIs and MCP. Owns use case evaluation through production deployment and support, including a Fortune 500 AI-adoption rollout. Ships fast in ambiguous environments."
+   "text": "Forward Deployed Engineer who builds and ships production GenAI (agentic workflows, RAG, tool-using agents) in Python with Claude, GPT and MCP, from use case evaluation to deployment and support."
   },
   "fact_ids": [
    30
@@ -54,7 +63,7 @@ export const STYLIST_SEED = [
    "resume:ai_engineer"
   ],
   "content": {
-   "text": "AI Engineer who designs, builds, and deploys GenAI and agentic AI for enterprise needs: RAG pipelines, tool-calling agents, agent memory, and multi-agent workflows in Python, with Claude and GPT via APIs and MCP. Experienced with data pipelines, embeddings, vector databases, prompt design, and human-in-the-loop evaluation."
+   "text": "AI Engineer building RAG pipelines, tool-calling agents, agent memory and multi-agent workflows in Python with Claude, GPT and MCP, from idea through production support."
   },
   "fact_ids": [
    31
@@ -69,7 +78,7 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "text": "GTM-focused engineer building automation and AI workflows for marketing, outreach, and customer support with Make, n8n, Python, Claude and OpenAI APIs, and MCP. Turns engagement data into GTM actions and builds RAG chatbots that answer only from source docs."
+   "text": "GTM engineer building automation and AI workflows for marketing, outreach and support with Make, n8n, Python, Claude, OpenAI and MCP."
   },
   "fact_ids": [
    32
@@ -111,7 +120,7 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "text": "Designed, built, and deployed a production agentic workflow (Python, Claude API, MCP) that turns raw engagement data into targeted outreach actions through tool calls; drove a 54% lift in impressions"
+   "text": "Built a production agentic workflow (Python, Claude API, MCP) for outreach; drove a 54% lift in impressions"
   },
   "fact_ids": [
    35
@@ -127,7 +136,7 @@ export const STYLIST_SEED = [
    "resume:ai_engineer"
   ],
   "content": {
-   "text": "Built Relay, an AI agent that automates a 6-step outbound workflow end to end, from account research to outbound activation, with human-in-the-loop review; used company-wide"
+   "text": "Built Relay, a company-wide AI agent that runs a 6-step outbound workflow with human-in-the-loop review"
   },
   "fact_ids": [
    36
@@ -144,7 +153,7 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "text": "Built and deployed a production RAG chatbot (LLM integration, REST API, semantic search) that lets customers retrieve relevant codes with a single question"
+   "text": "Deployed a production RAG chatbot that lets customers find relevant codes with a single question"
   },
   "fact_ids": [
    37
@@ -174,7 +183,7 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "text": "Built an n8n RAG support chatbot: Google Drive docs, recursive chunking, OpenAI embeddings and Supabase (pgvector); answers only from what it retrieves"
+   "text": "Built an n8n RAG support chatbot (OpenAI embeddings, Supabase pgvector) that answers only from source docs"
   },
   "fact_ids": [
    39
@@ -190,7 +199,7 @@ export const STYLIST_SEED = [
    "resume:ai_engineer"
   ],
   "content": {
-   "text": "Built an MVP Streamlit app (Python, Supabase) that ingests survey, photo, and voice-note inputs and runs automated gap analysis for business leaders"
+   "text": "Built a Streamlit MVP (Python, Supabase) that turns surveys, photos and voice notes into a gap analysis"
   },
   "fact_ids": [
    40
@@ -206,7 +215,7 @@ export const STYLIST_SEED = [
    "resume:ai_engineer"
   ],
   "content": {
-   "text": "Built a Make automation for LinkedIn and Microsoft Teams campaign announcements, saving 2 hours of manual work per week"
+   "text": "Automated LinkedIn and Microsoft Teams campaign announcements with Make, saving 2 hours a week"
   },
   "fact_ids": [
    41
@@ -222,7 +231,7 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "text": "Own AI and GTM solutions from use case evaluation through deployment and support, turning ambiguous requirements into KPIs and working tools with Marketing, Product, and leadership"
+   "text": "Own AI and GTM solutions end to end, turning ambiguous requirements into KPIs and working tools"
   },
   "fact_ids": [
    42
@@ -260,7 +269,7 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "text": "Worked directly with enterprise stakeholders on a Fortune 500 AI-adoption rollout; found the root cause of a 5-day manual reporting workflow and re-engineered the pipeline, cutting processing time by ~80%"
+   "text": "Re-engineered a 5-day manual reporting workflow for a Fortune 500 AI-adoption rollout, cutting time by ~80%"
   },
   "fact_ids": [
    44
@@ -277,7 +286,7 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "text": "Authored and tested prompts for an LLM-integrated automation that generated 1,000+ customized, metric-based insights; led onboarding for non-technical teams, with recommendations adopted by 100+ employees"
+   "text": "Authored prompts for an LLM automation that generated 1,000+ insights, adopted by 100+ employees"
   },
   "fact_ids": [
    45
@@ -294,7 +303,7 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "text": "Built and maintained Python and SQL ETL pipelines into Azure SQL, automating self-serve BI reports and key metrics across client engagements"
+   "text": "Built Python and SQL ETL pipelines into Azure SQL that power self-serve BI reports"
   },
   "fact_ids": [
    46
@@ -332,7 +341,7 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "text": "Queried large-scale SQL datasets with Python to surface engagement, churn, and behavior trends; ran root-cause and gap analysis with Product and Engineering and led UAT for data accuracy"
+   "text": "Analyzed large SQL datasets in Python to surface engagement and churn trends; led UAT for data accuracy"
   },
   "fact_ids": [
    48
@@ -370,7 +379,7 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "text": "Analyzed 50,000+ patient, caregiver, and clinician posts to find sentiment trends, unmet needs, and misinformation patterns; turned findings into stakeholder recommendations"
+   "text": "Analyzed 50,000+ patient, caregiver and clinician posts to surface unmet needs and misinformation"
   },
   "fact_ids": [
    50
@@ -387,9 +396,18 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "name": "Jamie, personal AI agent",
-   "link": "github.com/vishwamehta1029-cyber/jamie-agent",
-   "stack": "TypeScript, MCP, Postgres, Vercel"
+   "name": "Jamie, personal AI agent and second brain",
+   "stack": "TypeScript, MCP, Postgres, Vercel",
+   "links": [
+    {
+     "label": "Demo video",
+     "url": "https://youtu.be/6lmgMGKqaKQ"
+    },
+    {
+     "label": "GitHub",
+     "url": "https://github.com/vishwamehta1029-cyber/jamie-agent"
+    }
+   ]
   },
   "fact_ids": [
    173
@@ -406,7 +424,7 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "text": "Personal agent and second brain shared by Claude and ChatGPT through a TypeScript MCP server on Vercel and a persistent Postgres memory; 26 tools for facts, answers, lessons and handoffs"
+   "text": "TypeScript MCP server on Vercel with shared Postgres memory across Claude and ChatGPT; 26 tools"
   },
   "fact_ids": [
    173
@@ -423,9 +441,14 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "name": "Matchstick Studio, RAG pipeline for on-brand marketing images",
-   "link": "",
-   "stack": "Python, embeddings, vector search"
+   "name": "Matchstick Studio, RAG pipeline for on-brand images",
+   "stack": "Python, embeddings, vector search",
+   "links": [
+    {
+     "label": "Demo video",
+     "url": "https://lnkd.in/p/gUpQaAH8"
+    }
+   ]
   },
   "fact_ids": [
    51
@@ -442,7 +465,7 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "text": "Crawls any website into a vector knowledge base; the LLM writes copy grounded only in source content, composited into brand templates with real fonts and colors"
+   "text": "Crawls any website into a vector knowledge base and writes on-brand copy grounded only in its content"
   },
   "fact_ids": [
    51
@@ -460,8 +483,17 @@ export const STYLIST_SEED = [
   ],
   "content": {
    "name": "Campaign Request Orchestrator",
-   "link": "campaign-request-orchestrator.vercel.app",
-   "stack": "React, Vercel, OpenAI API"
+   "stack": "React, Vercel, OpenAI API",
+   "links": [
+    {
+     "label": "Live demo",
+     "url": "https://campaign-request-orchestrator.vercel.app"
+    },
+    {
+     "label": "GitHub",
+     "url": "https://github.com/vishwamehta1029-cyber/campaign-request-orchestrator"
+    }
+   ]
   },
   "fact_ids": [
    52
@@ -478,7 +510,7 @@ export const STYLIST_SEED = [
    "resume:gtm"
   ],
   "content": {
-   "text": "Deployed LLM agent that breaks campaign requests into tasks and executes them through tool calling and API integration"
+   "text": "LLM agent that breaks campaign requests into tasks and runs them through tool calling"
   },
   "fact_ids": [
    52
@@ -495,8 +527,8 @@ export const STYLIST_SEED = [
   ],
   "content": {
    "name": "Snowflake autonomous SQL data pipeline for AI agents",
-   "link": "",
-   "stack": "Snowflake, Dynamic Tables, Cortex Agents, AWS S3"
+   "stack": "Snowflake, Dynamic Tables, Cortex Agents, AWS S3",
+   "links": []
   },
   "fact_ids": [
    53
@@ -512,7 +544,7 @@ export const STYLIST_SEED = [
    "resume:ai_engineer"
   ],
   "content": {
-   "text": "Three-tier declarative pipeline loading ~1B order records from S3, with monitoring queries, a semantic view, and a Cortex Agent for conversational querying"
+   "text": "Declarative pipeline loading ~1B order records from S3, with a Cortex Agent for conversational queries"
   },
   "fact_ids": [
    53
@@ -647,7 +679,7 @@ export const STYLIST_SEED = [
   ],
   "content": {
    "school": "University of South Florida",
-   "degree": "B.S. Quantitative Economics and Econometrics (STEM); B.A. Psychology",
+   "degree": "B.S. Quantitative Economics & Econometrics (STEM), B.A. Psychology",
    "location": "Tampa, FL",
    "end": "Dec 2025"
   },

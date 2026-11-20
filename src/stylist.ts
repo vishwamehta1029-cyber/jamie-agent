@@ -11,6 +11,12 @@ import { extractSkills } from "./scoutParse.js";
 
 const ok = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] });
 
+// Key-order-independent JSON, so a change read back from the database compares equal to a new one
+const stable = (v: any): string =>
+  Array.isArray(v) ? `[${v.map(stable).join(",")}]`
+  : v && typeof v === "object" ? `{${Object.keys(v).sort().filter((k) => v[k] !== undefined).map((k) => `${JSON.stringify(k)}:${stable(v[k])}`).join(",")}}`
+  : JSON.stringify(v);
+
 export const SURFACES = [...RESUME_SURFACES, "portfolio"] as const;
 const RESUME_KINDS = ["header", "summary", "role", "bullet", "project", "skill_group", "education"];
 const PORTFOLIO_KINDS = ["case", "card", "chapter"];
@@ -153,6 +159,11 @@ export async function runChecks(before: Item[], after: Item[], ops: Op[]): Promi
       if (/on\w+\s*=|javascript:/i.test(all)) checks.push({ key: k, level: "error", msg: "scripts or event handlers aren't allowed" });
       const link = it.content.link;
       if (Array.isArray(link) && link[1] && !/^https:\/\//.test(String(link[1]))) checks.push({ key: k, level: "error", msg: "links must start with https://" });
+    }
+    if (Array.isArray(it.content.links)) {
+      for (const l of it.content.links as any[]) {
+        if (!l || !l.label || !/^https:\/\//.test(String(l.url ?? ""))) checks.push({ key: k, level: "error", msg: `link "${l?.label ?? "?"}" needs a label and an https:// address` });
+      }
     }
   }
 
@@ -306,9 +317,9 @@ export function registerStylistTools(server: McpServer) {
     async () => {
       const items = await loadItems();
       const created: any[] = [];
-      const pendingOps = (await q("SELECT ops FROM stylist_changes WHERE status IN ('pending','blocked')")).map((r: any) => JSON.stringify(r.ops));
+      const pendingOps = (await q("SELECT ops FROM stylist_changes WHERE status IN ('pending','blocked')")).map((r: any) => stable(r.ops));
       const propose = async (summary: string, ops: Op[]) => {
-        if (pendingOps.includes(JSON.stringify(ops))) return;
+        if (pendingOps.includes(stable(ops))) return;
         created.push({ summary, ...(await createChange("auto", summary, ops)) });
       };
 
@@ -342,9 +353,12 @@ export function registerStylistTools(server: McpServer) {
       const projects = await q("SELECT * FROM projects WHERE live_url IS NOT NULL AND in_scope");
       for (const p of projects) {
         const name = String(p.name).toLowerCase().split(/\s+/)[0];
-        const host = String(p.live_url).replace(/^https?:\/\//, "").replace(/\/$/, "");
         const resumeProj = items.find((i) => i.kind === "project" && String(i.content.name).toLowerCase().includes(name));
-        if (resumeProj && resumeProj.content.link !== host) await propose(`Update ${p.name} link to the live demo`, [{ op: "update", key: resumeProj.key, content: { link: host } }]);
+        const projLinks: any[] = Array.isArray(resumeProj?.content.links) ? resumeProj!.content.links : [];
+        if (resumeProj && !projLinks.some((l) => l.url === p.live_url)) {
+          const nextLinks = [{ label: "Live demo", url: p.live_url }, ...projLinks.filter((l) => !/live demo/i.test(l.label))];
+          await propose(`Add the live demo link for ${p.name}`, [{ op: "update", key: resumeProj.key, content: { links: nextLinks } }]);
+        }
         const kase = items.find((i) => i.kind === "case" && String(i.content.title).toLowerCase().includes(name));
         if (kase && (!Array.isArray(kase.content.link) || kase.content.link[1] !== p.live_url)) {
           await propose(`Point the ${p.name} case study at the live demo`, [{ op: "update", key: kase.key, content: { link: ["Try the live demo ↗", p.live_url] } }]);

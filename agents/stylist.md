@@ -41,6 +41,8 @@ Keep Vishwa's three resumes and her portfolio current. One change, one approval,
 
 Resume links stay the same forever and always return the latest approved version. The portfolio feed is public and holds only portfolio text, never contact details.
 
+**Resume layout (code):** light palette, equal 40pt margins on every side, a thin rule under each section title with clear space below it, one-line bullets with a hanging indent, and clickable links (portfolio, LinkedIn, GitHub in the header; demo videos, live demos and repos on each project). Leftover space is spread evenly between sections so the bottom margin matches the others. Body text stays at 9.8pt; content that doesn't fit is cut, never shrunk.
+
 ---
 
 ## 4. Content model
@@ -49,11 +51,11 @@ Each item has a `key`, a `kind`, the `surfaces` it appears on, its `content`, an
 
 | Kind | Example key | Content |
 |---|---|---|
-| `header` | `header` | name, email, phone, location, links |
+| `header` | `header` | name, email, phone, location, links (label + https url) |
 | `summary` | `summary:fde` | text |
 | `role` | `role:profundity` | org, title, title_by_surface, location, start, end |
 | `bullet` | `bullet:profundity:relay` | text (parent is a role or project) |
-| `project` | `project:jamie` | name, link, stack |
+| `project` | `project:jamie` | name, links (Demo video, Live demo, GitHub...), stack |
 | `skill_group` | `skills:core` | label, items |
 | `education` | `education:usf` | school, degree, location, end |
 | `case` | `case:relay` | any portfolio case-study fields (title, sub, built, parts, why, stack, link...) |
@@ -74,7 +76,7 @@ A change that breaks any of these is **blocked** and can't be approved.
 | Skills are real | Every listed skill must be backed by a brain fact |
 | No em dashes | Anywhere |
 | One page | Each affected resume is rendered; more than one page is blocked. Cut words, never shrink the type. |
-| Safe portfolio text | Only mark, br, b, strong, i, em; links must be https |
+| Safe text and links | Portfolio text only uses mark, br, b, strong, i, em; every link needs a label and an https address |
 
 Long bullets (over about 2 lines) get a warning.
 
@@ -103,7 +105,7 @@ Long bullets (over about 2 lines) get a warning.
 ## 8. Automatic pass (`jamie_stylist_auto`)
 
 - **Skills:** finds skills the brain backs but no resume lists, ranks them by how often Scout sees employers ask for them, and adds as many as keep every resume on one page. Reports the rest.
-- **Project links:** when a Project Lab project has a live URL, updates the matching resume project link and points the portfolio case study at the live demo.
+- **Project links:** when a Project Lab project has a live URL, adds a Live demo link to the matching resume project (keeping its other links) and points the portfolio case study at the live demo.
 - **Needs wording:** lists project and role facts no item cites yet, and shipped projects with no resume entry. Jamie drafts the bullet in Vishwa's voice and proposes it; code checks it like any other change.
 
 It never creates the same pending change twice.
