@@ -15,6 +15,7 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 export const WEIGHTS = {
   title_match: 3,
   skill_overlap: 3,
+  experience_fit: 2,
   direct_employer: 3,
   location: 2,
   recently_funded: 2,
@@ -46,9 +47,15 @@ type Signals = {
   yc?: boolean;
 };
 
+export function experienceRating(minYears: number | null | undefined, preferBelow: number, pickedByVishwa: boolean): number {
+  if (pickedByVishwa || minYears === null || minYears === undefined) return 5;
+  return minYears < preferBelow ? 5 : 2;
+}
+
 export function score(job: {
   signals: Signals;
   is_agency: boolean;
+  experience: number;
   hiring_manager?: string | null;
   location?: string | null;
   work_mode?: string | null;
@@ -58,6 +65,7 @@ export function score(job: {
   const parts = {
     title_match: clamp(s.title_match) * WEIGHTS.title_match,
     skill_overlap: clamp(s.skill_overlap) * WEIGHTS.skill_overlap,
+    experience_fit: job.experience * WEIGHTS.experience_fit,
     direct_employer: (job.is_agency ? 0 : 5) * WEIGHTS.direct_employer,
     location: locationRating(job.location, job.work_mode) * WEIGHTS.location,
     recently_funded: (s.recently_funded ? 5 : 0) * WEIGHTS.recently_funded,
@@ -81,7 +89,7 @@ const jobInput = {
   posted_at: z.string().optional().describe("ISO date the listing was ORIGINALLY posted"),
   is_repost: z.boolean().optional().describe("true if LinkedIn labels it Reposted or the original date is older than the shown date"),
   repost_proof: z.string().optional().describe("Required when is_repost=false: what you checked, e.g. 'no Reposted label; listed 14 hours ago'"),
-  min_years: z.number().min(0).max(30).optional().describe("Minimum years required, as stated. Omit if not stated."),
+  min_years: z.number().min(0).max(30).optional().describe("Lowest number of years the posting asks for. For a range like 2-4 or 1-4 use the lower number. Omit if not stated."),
   years_quote: z.string().optional().describe("The exact posting text about experience"),
   requires_cs_degree: z.boolean().optional(),
   swe_focused: z.boolean().optional().describe("Primarily a software engineering role"),
@@ -131,7 +139,7 @@ export function registerScoutTools(server: McpServer) {
         return ok({
           run,
           rules: {
-            reject_if_min_years_above: Number(maxYears),
+            prefer_min_years_below: Number(maxYears),
             max_age_hours: Number(maxAge),
             exclude_agencies: excludeAgencies === true,
             original_listings_only: true,
@@ -158,7 +166,7 @@ export function registerScoutTools(server: McpServer) {
     "jamie_scout_add_job",
     {
       description:
-        "Scout: submit one posting you found. The server applies Vishwa's hard rules (original listing only with proof, experience cutoff, no CS-degree or pure SWE roles, freshness window, agencies, already applied, duplicates), computes the fit score and resume type, logs the skills, and saves it as shortlisted or rejected with reasons. Report facts honestly; never guess min_years.",
+        "Scout: submit one posting you found. The server applies Vishwa's hard rules (original listing only with proof, no CS-degree or pure SWE roles, freshness window, agencies, already applied, duplicates), computes the fit score and resume type, logs the skills, and saves it as shortlisted or rejected with reasons. Experience is a preference only: roles asking for fewer than 3 years rank higher, nothing is rejected or flagged for experience, and jobs from her own saved list are never marked down. Report facts honestly; never guess min_years.",
       inputSchema: jobInput,
     },
     async (a) => {
@@ -185,11 +193,7 @@ export function registerScoutTools(server: McpServer) {
       if (a.is_repost === true) reasons.push("reposted listing");
       else if (a.is_repost === undefined || !a.repost_proof) reasons.push("repost status not verified");
 
-      // 2. Experience cutoff
-      if (a.min_years !== undefined && a.min_years > Number(maxYears)) {
-        reasons.push(`requires ${a.min_years}+ years (limit ${maxYears})`);
-      } else if (a.min_years === undefined) flags.push("experience not stated");
-      if (a.min_years !== undefined && !a.years_quote) flags.push("experience quote missing");
+      // 2. Experience is a preference, not a rule: it only affects ranking (see score), never rejects or flags.
 
       // 3. Degree and role type
       if (a.requires_cs_degree) reasons.push("requires a CS degree");
@@ -220,7 +224,8 @@ export function registerScoutTools(server: McpServer) {
       else if (prior.length) flags.push(`applied to ${prior.length} other role(s) here`);
 
       const signals: Signals = a.signals ?? {};
-      const s = score({ signals, is_agency: !!a.is_agency, hiring_manager: a.hiring_manager, location: a.location, work_mode: a.work_mode });
+      const experience = experienceRating(a.min_years, Number(maxYears), a.source === "linkedin_saved");
+      const s = score({ signals, is_agency: !!a.is_agency, experience, hiring_manager: a.hiring_manager, location: a.location, work_mode: a.work_mode });
       const rtype = resumeType(a.role);
       if (rtype === "ask") flags.push("resume choice unclear, ask Vishwa");
       const status = reasons.length ? "rejected" : "shortlisted";

@@ -732,7 +732,7 @@ export function buildServer() {
         company_bounce_cap: z.number().int().optional(),
         daily_send_limit: z.number().int().optional(),
         max_patterns_per_person: z.number().int().optional(),
-        max_years_experience: z.number().int().optional().describe("Skip roles whose minimum required experience is above this"),
+        max_years_experience: z.number().int().optional().describe("Scout preference: roles asking for fewer than this many years rank higher. Never a hard filter."),
         guessing_paused: z.boolean().optional(),
         scout_max_age_hours: z.number().int().min(1).max(720).optional().describe("Scout freshness window in hours"),
         scout_exclude_agencies: z.boolean().optional().describe("Scout rejects staffing and recruiting agency postings"),

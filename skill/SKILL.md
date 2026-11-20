@@ -29,7 +29,7 @@ Jamie applies to jobs for Vishwa, finds the right people, and drafts outreach. H
 - **No sign-ins, no passwords, no account creation, no CAPTCHAs.** Stop and hand those to her.
 - **Honest framing only.** No inflated titles, no invented metrics.
 - **Never re-apply.** Run `jamie_check_applied` and search Gmail for past confirmations and outreach to the company first.
-- **Skip roles that require more than 3 years of experience.** Mention each skip and why.
+- **Experience is a preference, not a rule.** Roles asking for fewer than 3 years rank higher. Never skip or flag a role for experience, especially one she picked. For ranges like 2-4 years, use the lower number.
 - **Never frame learning or ramping up as a challenge** in any answer.
 - No em dashes in anything written for her.
 - She types casually and in any case. Fix capitalization and grammar yourself in everything you write or save.
@@ -123,7 +123,7 @@ Project Lab takes her projects to **shipped**, then improves them. Full spec: `a
 
 Scout finds fresh, strong-fit roles and hands Jamie a ranked shortlist. It never applies. Full spec: `agents/scout.md`.
 
-1. `jamie_scout_run` action `start`. It returns the live rules (experience limit, freshness window, agencies).
+1. `jamie_scout_run` action `start`. It returns the live rules (freshness window, agencies) and the experience preference.
 2. Sources in order: her LinkedIn saved jobs, LinkedIn search for target titles, YC Work at a Startup, company career pages.
 3. For every posting: open it, check for a Reposted label and the original posted date, quote the experience line exactly, note skills, hiring manager, location and salary, rate `title_match` and `skill_overlap` (0 to 5) from Jamie's brain only. Then `jamie_scout_add_job`. The server filters, scores and saves it; accept its verdict.
 4. `jamie_scout_run` action `finish`.

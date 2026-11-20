@@ -43,14 +43,13 @@ Scout never applies. Applying belongs to Administrator.
 | Rule | How it's checked |
 |---|---|
 | Original listing only | `is_repost` must be false **and** `repost_proof` given. Unclear means rejected. |
-| Experience | Rejected if `min_years` is above the `max_years_experience` setting. Not stated means kept and flagged. |
 | No CS degree requirement, not pure SWE | `requires_cs_degree` or `swe_focused` means rejected |
 | Fresh | Rejected if older than `scout_max_age_hours` (default 24). Unknown date means kept and flagged. |
 | No agencies | Rejected while `scout_exclude_agencies` is true (default) |
 | Not already applied | Same company and role in `applications` means rejected. Another role at that company is flagged. |
 | No duplicates | Same LinkedIn id, URL, or company and role in the last 30 days returns the existing job |
 
-**Report facts honestly.** Never guess `min_years`; quote the posting in `years_quote`.
+**Experience is a preference, not a rule.** It never rejects or flags a job; it only affects ranking (section 5). For a range like 2-4 or 1-4 years, `min_years` is the lower number. Report facts honestly: never guess `min_years`, and quote the posting in `years_quote`.
 
 ---
 
@@ -60,6 +59,7 @@ Scout never applies. Applying belongs to Administrator.
 |---|---|---|
 | Title matches a target title | `signals.title_match` 0 to 5 | 3 |
 | Overlap with her verified skills and projects | `signals.skill_overlap` 0 to 5 | 3 |
+| Experience: fewer than 3 years asked, or not stated, scores full; 3 or more scores lower. Jobs from her own saved list always score full. | `min_years`, `source` | 2 |
 | Direct employer | not `is_agency` | 3 |
 | Location: Seattle or remote 5, SF 3.5, NY 2, other 1 | from `location`, `work_mode` | 2 |
 | Raised money recently | `signals.recently_funded` | 2 |
@@ -121,7 +121,7 @@ Every posting's skills go into `job_skills`. `jamie_scout_skill_demand` returns 
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `max_years_experience` | 3 | Reject if minimum required years is **above** this |
+| `max_years_experience` | 3 | Preference: roles asking for fewer than this many years rank higher. Never a filter. |
 | `scout_max_age_hours` | 24 | Freshness window |
 | `scout_exclude_agencies` | true | Reject staffing and recruiting agency postings |
 
