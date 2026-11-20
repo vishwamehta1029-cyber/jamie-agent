@@ -1,4 +1,5 @@
 import { q } from "./db.js";
+import { DONE_CHECKLIST } from "./projectLab.js";
 
 const esc = (v: unknown) =>
   v === null || v === undefined || v === "" ? "" : String(v).replace(/\|/g, "\\|").replace(/\n/g, " ");
@@ -120,6 +121,36 @@ export async function renderBrain(): Promise<string> {
     out.push(`- **${day(h.created_at)} · ${h.platform}:** ${h.summary}${h.next_steps ? `  \n  Next: ${h.next_steps}` : ""}`);
   }
   out.push("");
+
+  const [projects, labTasks, labIdeas] = await Promise.all([
+    q("SELECT * FROM projects ORDER BY in_scope DESC, status, name"),
+    q("SELECT t.*, p.name project_name FROM pl_tasks t JOIN projects p ON p.id = t.project_id ORDER BY p.name, t.order_no, t.id"),
+    q("SELECT i.*, p.name project_name FROM pl_ideas i JOIN projects p ON p.id = i.project_id ORDER BY i.status, i.score DESC NULLS LAST"),
+  ]);
+  out.push(`## Project Lab\n`);
+  if (!projects.length) out.push("_Nothing yet._\n");
+  for (const p of projects) {
+    const tasks = labTasks.filter((t: any) => t.project_id === p.id && t.status !== "parked");
+    const done = tasks.filter((t: any) => t.status === "done").length;
+    const dod = Object.keys(DONE_CHECKLIST).filter((k) => p.done_checklist?.[k]?.done).length;
+    out.push(`### ${p.name} · ${p.status}${p.in_scope ? "" : " · out of scope"}\n`);
+    out.push(`- Repo: ${p.repo}${p.live_url ? ` · Live: ${p.live_url}` : ""}`);
+    out.push(`- Progress: ${done} of ${tasks.length} tasks · Definition of done: ${dod} of ${Object.keys(DONE_CHECKLIST).length}`);
+    for (const [label, v] of [["What it does", p.one_liner], ["Problem", p.problem], ["Architecture", p.architecture], ["Stack", p.stack],
+      ["Decisions", p.decisions], ["Failures and fixes", p.failures], ["Approved metrics", p.metrics], ["Talking points", p.talking_points]] as const) {
+      if (v) out.push(`- ${label}: ${String(v).replace(/\n/g, " ")}`);
+    }
+    if (p.skills_proven?.length) out.push(`- Skills proven: ${p.skills_proven.join(", ")}`);
+    if (p.v2_list?.length) out.push(`- v2 list: ${p.v2_list.join("; ")}`);
+    out.push("");
+    if (tasks.length) out.push(table(["#", "Task", "Min", "Milestone", "Status", "PR"], tasks, (t) => [t.order_no, t.title, t.minutes, t.milestone, t.status, t.pr_url]));
+  }
+  if (labIdeas.length) {
+    out.push(`### Project Lab ideas\n`);
+    out.push(table(["#", "Project", "Idea", "Kind", "Effort", "Score", "Status", "Reason"], labIdeas, (i) => [
+      i.id, i.project_name, i.idea, i.kind, i.effort, i.score, i.status, i.reason,
+    ]));
+  }
 
   out.push(`## Guardrail Settings\n`);
   out.push(table(["Setting", "Value"], settings, (r) => [r.key, JSON.stringify(r.value)]));

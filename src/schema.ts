@@ -126,4 +126,77 @@ INSERT INTO settings (key, value) VALUES
   ('guessing_paused', 'false')
 ON CONFLICT (key) DO NOTHING;
 DELETE FROM settings WHERE key IN ('weekly_bounce_cap', 'weekly_bounce_rate_pct', 'min_sends_for_rate');
+
+-- Project Lab: finish, deploy, improve and suggest for Vishwa's projects
+CREATE TABLE IF NOT EXISTS projects (
+  id SERIAL PRIMARY KEY,
+  repo TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  one_liner TEXT,
+  problem TEXT,
+  status TEXT NOT NULL DEFAULT 'not_started',
+  in_scope BOOLEAN NOT NULL DEFAULT TRUE,
+  live_url TEXT,
+  deploy_method TEXT,
+  architecture TEXT,
+  stack TEXT,
+  decisions TEXT,
+  failures TEXT,
+  metrics TEXT,
+  skills_proven TEXT[] NOT NULL DEFAULT '{}',
+  talking_points TEXT,
+  v2_list TEXT[] NOT NULL DEFAULT '{}',
+  done_checklist JSONB NOT NULL DEFAULT '{}'::jsonb,
+  tasks_locked BOOLEAN NOT NULL DEFAULT FALSE,
+  last_synced_commit TEXT,
+  last_synced_at TIMESTAMPTZ,
+  last_activity_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  shipped_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS pl_tasks (
+  id SERIAL PRIMARY KEY,
+  project_id INT NOT NULL REFERENCES projects(id),
+  title TEXT NOT NULL,
+  detail TEXT,
+  minutes INT NOT NULL DEFAULT 30,
+  order_no INT NOT NULL DEFAULT 0,
+  milestone TEXT,
+  status TEXT NOT NULL DEFAULT 'todo',
+  pr_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  done_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS pl_tasks_project_idx ON pl_tasks (project_id, order_no);
+CREATE TABLE IF NOT EXISTS pl_changes (
+  id SERIAL PRIMARY KEY,
+  project_id INT NOT NULL REFERENCES projects(id),
+  task_id INT REFERENCES pl_tasks(id),
+  idea_id INT,
+  branch TEXT NOT NULL,
+  pr_url TEXT,
+  summary TEXT,
+  status TEXT NOT NULL DEFAULT 'open',
+  check_back_q TEXT,
+  check_back_result TEXT,
+  opened_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  closed_at TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS pl_ideas (
+  id SERIAL PRIMARY KEY,
+  project_id INT NOT NULL REFERENCES projects(id),
+  idea TEXT NOT NULL,
+  why TEXT,
+  skills TEXT[] NOT NULL DEFAULT '{}',
+  job_count INT,
+  effort TEXT,
+  demo_value TEXT,
+  score NUMERIC,
+  kind TEXT NOT NULL DEFAULT 'improvement',
+  status TEXT NOT NULL DEFAULT 'pitched',
+  reason TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;

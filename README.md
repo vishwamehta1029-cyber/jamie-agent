@@ -14,7 +14,9 @@ Jamie is my personal agent. Think of him as a second brain that does the work fo
 
 | File | What it does |
 |---|---|
-| [`src/server.ts`](src/server.ts) | All 26 tools: memory, applications, contacts, emails, guardrails |
+| [`src/server.ts`](src/server.ts) | Core tools: memory, applications, contacts, emails, guardrails |
+| [`src/projectLab.ts`](src/projectLab.ts) | Project Lab: 12 tools to finish, deploy, improve and suggest for her projects |
+| [`agents/project-lab.md`](agents/project-lab.md) | Project Lab agent spec |
 | [`src/brain.ts`](src/brain.ts) | Turns the database into one readable "brain" file |
 | [`src/schema.ts`](src/schema.ts) | The brain's tables and default limits |
 | [`src/http.ts`](src/http.ts) | Secure endpoint for Claude and ChatGPT |

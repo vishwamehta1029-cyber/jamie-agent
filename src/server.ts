@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { promises as dns } from "node:dns";
 import { q, one, getSetting, setSetting, tsOr } from "./db.js";
+import { registerProjectLabTools, activeProject, progress as labProgress } from "./projectLab.js";
 
 const ok = (data: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
@@ -106,7 +107,7 @@ export function applyPattern(pattern: string, first: string, last: string, domai
 }
 
 export function buildServer() {
-  const server = new McpServer({ name: "jamie", version: "0.3.0" });
+  const server = new McpServer({ name: "jamie", version: "0.4.0" });
 
   server.registerTool(
     "jamie_start_session",
@@ -136,9 +137,11 @@ export function buildServer() {
                 (SELECT count(*) FROM applications WHERE status='submitted') submitted,
                 (SELECT count(*) FROM contacts) contacts`
       );
+      const lab = await activeProject();
       return ok({
         platform,
         last_handoff: handoff,
+        project_lab: lab ? await labProgress(lab.id) : null,
         guardrails: await guardrailStatus(),
         pending_applications: awaiting,
         sends_needing_bounce_check: needCheck,
@@ -761,6 +764,8 @@ export function buildServer() {
       return ok({ ...s, bounce_rate: sends ? `${Math.round((Number(s.bounces) / sends) * 100)}%` : "n/a", days: d });
     }
   );
+
+  registerProjectLabTools(server);
 
   return server;
 }
