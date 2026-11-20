@@ -21,6 +21,9 @@ Jamie is my personal agent. Think of him as a second brain that does the work fo
 | [`src/scoutParse.ts`](src/scoutParse.ts) | Scout's code-only extraction: years, skills, degree, salary, location, reposts, agencies |
 | [`src/scoutAts.ts`](src/scoutAts.ts) | Reads Greenhouse, Lever and Ashby job boards through their public APIs |
 | [`agents/scout.md`](agents/scout.md) | Scout agent spec |
+| [`src/stylist.ts`](src/stylist.ts) | Stylist: 7 tools that keep the resumes and portfolio current, with honesty checks in code |
+| [`src/stylistResume.ts`](src/stylistResume.ts) | Builds one-page resume PDFs from the database |
+| [`agents/stylist.md`](agents/stylist.md) | Stylist agent spec |
 | [`src/brain.ts`](src/brain.ts) | Turns the database into one readable "brain" file |
 | [`src/schema.ts`](src/schema.ts) | The brain's tables and default limits |
 | [`src/http.ts`](src/http.ts) | Secure endpoint for Claude and ChatGPT |

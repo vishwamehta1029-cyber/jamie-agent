@@ -167,6 +167,14 @@ export async function renderBrain(): Promise<string> {
     out.push(scoutSkills.map((s: any) => `${s.skill} (${s.n})`).join(", ") + "\n");
   }
 
+  const [styItems, styChanges] = await Promise.all([
+    q("SELECT key, kind, surfaces, version, updated_at FROM stylist_items WHERE active ORDER BY kind, order_no"),
+    q("SELECT id, summary, status, created_at, published_at FROM stylist_changes ORDER BY id DESC LIMIT 20"),
+  ]);
+  out.push(`## Stylist\n`);
+  out.push(`${styItems.length} live resume and portfolio items. Resumes: fde, ai_engineer, gtm. Portfolio feed: /public/portfolio.json\n`);
+  if (styChanges.length) out.push(table(["#", "Change", "Status", "Published"], styChanges, (c) => [c.id, c.summary, c.status, day(c.published_at)]));
+
   out.push(`## Guardrail Settings\n`);
   out.push(table(["Setting", "Value"], settings, (r) => [r.key, JSON.stringify(r.value)]));
 

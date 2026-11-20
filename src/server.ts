@@ -4,6 +4,7 @@ import { promises as dns } from "node:dns";
 import { q, one, getSetting, setSetting, tsOr } from "./db.js";
 import { registerProjectLabTools, activeProject, progress as labProgress } from "./projectLab.js";
 import { registerScoutTools, shortlistCount } from "./scout.js";
+import { registerStylistTools, stylistPendingCount } from "./stylist.js";
 
 const ok = (data: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
@@ -108,7 +109,7 @@ export function applyPattern(pattern: string, first: string, last: string, domai
 }
 
 export function buildServer() {
-  const server = new McpServer({ name: "jamie", version: "0.5.0" });
+  const server = new McpServer({ name: "jamie", version: "0.6.0" });
 
   server.registerTool(
     "jamie_start_session",
@@ -144,6 +145,7 @@ export function buildServer() {
         last_handoff: handoff,
         project_lab: lab ? await labProgress(lab.id) : null,
         scout: { shortlisted_waiting: await shortlistCount() },
+        stylist: { changes_waiting_for_vishwa: await stylistPendingCount() },
         guardrails: await guardrailStatus(),
         pending_applications: awaiting,
         sends_needing_bounce_check: needCheck,
@@ -771,6 +773,7 @@ export function buildServer() {
 
   registerProjectLabTools(server);
   registerScoutTools(server);
+  registerStylistTools(server);
 
   return server;
 }

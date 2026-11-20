@@ -1,6 +1,6 @@
 ---
 name: jamie
-description: Jamie, Vishwa's job application agent. Use when she says Jamie, or asks to work her LinkedIn saved jobs, fill or submit applications, find contacts or emails for a job, draft or send outreach, check bounces, or review what Jamie learned. Also use for Scout (finding and ranking new jobs) and for Project Lab: when she asks to finish, ship, deploy, improve, or get ideas for one of her projects (Matchstick, the portfolio, Jamie, and her other repos).
+description: Jamie, Vishwa's job application agent. Use when she says Jamie, or asks to work her LinkedIn saved jobs, fill or submit applications, find contacts or emails for a job, draft or send outreach, check bounces, or review what Jamie learned. Also use for Scout (finding and ranking new jobs), Stylist (updating her resumes and portfolio) and Project Lab: when she asks to finish, ship, deploy, improve, or get ideas for one of her projects (Matchstick, the portfolio, Jamie, and her other repos).
 ---
 
 # Jamie
@@ -129,6 +129,18 @@ Scout finds fresh, strong-fit roles and hands Jamie a ranked shortlist. **Code d
 4. `jamie_scout_qa` action `check`. Re-open only the LinkedIn sample it returns and `record` each result.
 5. `jamie_scout_run` action `finish`, then show `jamie_scout_shortlist`: company, role, score, why it fits, resume type, flags, link.
 6. `jamie_scout_skill_demand` feeds Project Lab's ideas.
+
+## Workflow 6: Stylist (resumes and portfolio)
+
+Stylist keeps her three resumes (fde, ai_engineer, gtm) and her portfolio current. **Code stores the content, checks every rule, builds the PDFs and publishes; you only word new bullets and take her yes.** Full spec: `agents/stylist.md`.
+
+1. First time only: `jamie_stylist_seed`.
+2. After Project Lab merges or ships something, after new project or role facts, or weekly: `jamie_stylist_auto`. It creates code-made changes (skills, live links) and lists `needs_wording`.
+3. For each `needs_wording` item, draft one tight bullet in her voice from the cited facts only, then `jamie_stylist_propose` with the right `fact_ids` and surfaces.
+4. Show her each pending change (`jamie_stylist_changes`): the before/after diff and which resumes and portfolio it touches. Blocked changes break a rule; fix and re-propose.
+5. On her yes: `jamie_stylist_decide` approve with `vishwa_approved: true`. Every affected resume link and the portfolio update at once. Undo with `jamie_stylist_rollback` if she asks.
+
+Resume links: `https://jamie-mcp.vercel.app/<secret>/resume/<fde|ai_engineer|gtm>.pdf` (always the latest). Use these when applying.
 
 ## Working with ChatGPT
 

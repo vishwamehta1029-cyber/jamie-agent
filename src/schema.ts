@@ -275,4 +275,31 @@ CREATE TABLE IF NOT EXISTS job_skills (
   skill TEXT NOT NULL,
   PRIMARY KEY (job_id, skill)
 );
+
+-- Stylist: resume and portfolio content, published on Vishwa's approval
+CREATE TABLE IF NOT EXISTS stylist_items (
+  id SERIAL PRIMARY KEY,
+  key TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL,
+  parent_key TEXT,
+  surfaces TEXT[] NOT NULL DEFAULT '{}',
+  content JSONB NOT NULL,
+  fact_ids INT[] NOT NULL DEFAULT '{}',
+  order_no INT NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  version INT NOT NULL DEFAULT 1,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS stylist_changes (
+  id SERIAL PRIMARY KEY,
+  trigger TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  ops JSONB NOT NULL,
+  checks JSONB NOT NULL DEFAULT '[]'::jsonb,
+  status TEXT NOT NULL DEFAULT 'pending',
+  reverts INT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  decided_at TIMESTAMPTZ,
+  published_at TIMESTAMPTZ
+);
 `;
