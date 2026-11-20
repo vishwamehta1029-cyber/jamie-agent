@@ -72,8 +72,8 @@ export function applyOps(items: Item[], ops: Op[]): { items: Item[]; diff: any[]
 }
 
 const numsIn = (t: string) =>
-  (t.match(/~?\$?\d[\d,]*(?:\.\d+)?\s?(?:%|\+|[kKmMbB]\b)?/g) || [])
-    .map((x) => x.replace(/[~$,\s+%]/g, "").replace(/[kKmMbB]$/, "").replace(/\.0+$/, ""))
+  (t.match(/(?<![A-Za-z0-9])~?\$?\d[\d,]*(?:\.\d+)?(?:\s?(?:%|\+|[kKmMbBxX]\b))?(?![A-Za-z0-9])/g) || [])
+    .map((x) => x.replace(/[~$,\s+%]/g, "").replace(/[kKmMbBxX]$/, "").replace(/\.0+$/, ""))
     .filter(Boolean);
 
 const textFields = (c: any): string[] => {
@@ -149,7 +149,7 @@ export async function runChecks(before: Item[], after: Item[], ops: Op[]): Promi
     }
 
     // Resume bullet length
-    if (it.kind === "bullet" && String(it.content.text ?? "").length > 230) checks.push({ key: k, level: "warning", msg: "bullet is long (over ~2 lines); consider tightening" });
+    if (it.kind === "bullet" && String(it.content.text ?? "").length > 340) checks.push({ key: k, level: "warning", msg: "bullet is long (over ~3 lines); consider tightening" });
 
     // Portfolio HTML must be simple and safe
     if (isPortfolio) {
@@ -288,7 +288,7 @@ export function registerStylistTools(server: McpServer) {
         trigger: z.enum(["project_lab", "new_fact", "vishwa", "auto"]).optional(),
         ops: z.array(z.object({
           op: z.enum(["add", "update", "retire"]),
-          key: z.string().describe("e.g. bullet:profundity:relay, project:matchstick, skills:core, case:jamie, card:jamie, chap:4"),
+          key: z.string().describe("e.g. bullet:profundity:fde2, project:cro:fde, skills:fde:1, case:jamie, card:jamie, chap:4"),
           kind: z.enum(["header", "summary", "role", "bullet", "project", "skill_group", "education", "case", "card", "chapter"]).optional(),
           parent_key: z.string().optional(),
           surfaces: z.array(z.enum(SURFACES)).optional(),
@@ -328,24 +328,25 @@ export function registerStylistTools(server: McpServer) {
       const brainSkills = new Set(extractSkills(facts.map((f: any) => f.fact).join("\n")));
       const listed = new Set(extractSkills(items.filter((i) => i.kind === "skill_group").flatMap((i) => i.content.items).join(", ")));
       const missingAll = [...brainSkills].filter((s) => !listed.has(s));
-      const core = items.find((i) => i.key === "skills:core");
+      // Each resume has its own skill groups; new skills go into the first group of each resume that lacks them
+      const firstGroups = RESUME_SURFACES.map((surf) => items.filter((i) => i.active && i.kind === "skill_group" && i.surfaces.includes(surf)).sort((a, b) => a.order_no - b.order_no)[0]).filter(Boolean) as Item[];
       let skillsSkipped: string[] = [];
-      if (missingAll.length && core) {
+      if (missingAll.length && firstGroups.length) {
         // Most-requested first (from Scout's job data), then add only as many as keep every resume on one page
         const demand = new Map((await q("SELECT skill, count(DISTINCT job_id) n FROM job_skills GROUP BY skill")).map((r: any) => [r.skill, Number(r.n)]));
         const ranked = missingAll.sort((a, b) => (demand.get(b) ?? 0) - (demand.get(a) ?? 0));
         const fits: string[] = [];
+        const opsFor = (add: string[]): Op[] => firstGroups.map((g) => ({ op: "update", key: g.key, content: { items: [...g.content.items, ...add.map(display)] } }) as Op);
         for (const sk of ranked) {
-          const trial = applyOps(items, [{ op: "update", key: "skills:core", content: { items: [...core.content.items, ...[...fits, sk].map(display)] } }]).items;
+          const trial = applyOps(items, opsFor([...fits, sk])).items;
           let ok1 = true;
-          for (const surf of core.surfaces.filter((x) => x.startsWith("resume:"))) if ((await renderPdf(buildModel(trial, surf))).pages > 1) { ok1 = false; break; }
+          for (const surf of RESUME_SURFACES) if ((await renderPdf(buildModel(trial, surf))).pages > 1) { ok1 = false; break; }
           if (ok1) fits.push(sk); else skillsSkipped.push(display(sk));
         }
         if (fits.length) {
           const sources = facts.filter((f: any) => fits.some((m) => extractSkills(f.fact).includes(m))).map((f: any) => f.id);
-          await propose(`Add skills from the brain that no resume lists: ${fits.map(display).join(", ")}`, [
-            { op: "update", key: "skills:core", content: { items: [...core.content.items, ...fits.map(display)] }, fact_ids: [...new Set([...core.fact_ids, ...sources])] },
-          ]);
+          await propose(`Add skills from the brain that no resume lists: ${fits.map(display).join(", ")}`,
+            opsFor(fits).map((o, i) => ({ ...o, fact_ids: [...new Set([...firstGroups[i].fact_ids, ...sources])] })));
         }
       }
 
@@ -353,12 +354,17 @@ export function registerStylistTools(server: McpServer) {
       const projects = await q("SELECT * FROM projects WHERE live_url IS NOT NULL AND in_scope");
       for (const p of projects) {
         const name = String(p.name).toLowerCase().split(/\s+/)[0];
-        const resumeProj = items.find((i) => i.kind === "project" && String(i.content.name).toLowerCase().includes(name));
-        const projLinks: any[] = Array.isArray(resumeProj?.content.links) ? resumeProj!.content.links : [];
-        if (resumeProj && !projLinks.some((l) => l.url === p.live_url)) {
-          const nextLinks = [{ label: "Live demo", url: p.live_url }, ...projLinks.filter((l) => !/live demo/i.test(l.label))];
-          await propose(`Add the live demo link for ${p.name}`, [{ op: "update", key: resumeProj.key, content: { links: nextLinks } }]);
+        // Every resume variant of this project: a linked name points at the live demo, otherwise add a Live Demo link
+        const linkOps: Op[] = [];
+        for (const rp of items.filter((i) => i.active && i.kind === "project" && String(i.content.name).toLowerCase().includes(name))) {
+          const projLinks: any[] = Array.isArray(rp.content.links) ? rp.content.links : [];
+          if (rp.content.name_url) {
+            if (rp.content.name_url !== p.live_url) linkOps.push({ op: "update", key: rp.key, content: { name_url: p.live_url } } as Op);
+          } else if (!projLinks.some((l) => l.url === p.live_url)) {
+            linkOps.push({ op: "update", key: rp.key, content: { links: [{ label: "Live Demo", url: p.live_url }, ...projLinks.filter((l) => !/live demo/i.test(l.label))] } } as Op);
+          }
         }
+        if (linkOps.length) await propose(`Add the live demo link for ${p.name}`, linkOps);
         const kase = items.find((i) => i.kind === "case" && String(i.content.title).toLowerCase().includes(name));
         if (kase && (!Array.isArray(kase.content.link) || kase.content.link[1] !== p.live_url)) {
           await propose(`Point the ${p.name} case study at the live demo`, [{ op: "update", key: kase.key, content: { link: ["Try the live demo ↗", p.live_url] } }]);

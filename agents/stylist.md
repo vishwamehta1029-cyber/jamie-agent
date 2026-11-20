@@ -47,17 +47,19 @@ Resume links stay the same forever and always return the latest approved version
 
 ## 4. Content model
 
+The resume layout is Vishwa's own template, rebuilt in code (Times serif, 0.5in margins, navy headline and section rules; order Summary, Education, Skills, Experience, Projects). The seed is her exact wording from her three resumes.
+
 Each item has a `key`, a `kind`, the `surfaces` it appears on, its `content`, and the `fact_ids` it comes from.
 
 | Kind | Example key | Content |
 |---|---|---|
-| `header` | `header` | name, email, phone, location, links (label + https url) |
-| `summary` | `summary:fde` | text |
-| `role` | `role:profundity` | org, title, title_by_surface, location, start, end |
-| `bullet` | `bullet:profundity:relay` | text (parent is a role or project) |
-| `project` | `project:jamie` | name, links (Demo video, Live demo, GitHub...), stack |
-| `skill_group` | `skills:core` | label, items |
-| `education` | `education:usf` | school, degree, location, end |
+| `header` | `header` | name, email, phone, location, headline_by_surface, links (label + https url) |
+| `summary` | `summary:fde` | text, or bullets (the GTM summary is bullets) |
+| `role` | `role:profundity` | org, orgline (the italic line), title, title_by_surface, start, end |
+| `bullet` | `bullet:profundity:fde2` | text (parent is a role) |
+| `project` | `project:cro:fde` | name, name_url (makes the name a link), stack, links (Demo Video, Live Demo, GitHub...), text |
+| `skill_group` | `skills:fde:1` | label, items (each resume has its own groups) |
+| `education` | `education:usf` | school, degree, end |
 | `case` | `case:relay` | any portfolio case-study fields (title, sub, built, parts, why, stack, link...) |
 | `card` | `card:jamie` | q (the question on the card) |
 | `chapter` | `chap:2` | org, when, h3, say, chips (resume timeline) |

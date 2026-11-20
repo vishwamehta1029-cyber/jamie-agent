@@ -1,4 +1,6 @@
-// Renders a one-page, ATS-friendly resume PDF from Stylist's items. Pure code (pdfkit), no LLM.
+// Renders a one-page resume PDF from Stylist's items in Vishwa's own template. Pure code (pdfkit), no LLM.
+// Template measured from her originals (LibreOffice, Liberation Serif): Times serif, 0.5in margins,
+// left-aligned name, navy headline, navy uppercase section headings over a full-width navy rule.
 import PDFDocument from "pdfkit";
 
 export type Item = {
@@ -17,12 +19,12 @@ export type Link = { label: string; url: string };
 export const RESUME_SURFACES = ["resume:fde", "resume:ai_engineer", "resume:gtm"] as const;
 
 export type ResumeModel = {
-  header: { name?: string; email?: string; phone?: string; location?: string; links?: Link[] };
-  summary: string | null;
-  roles: { org: string; title: string; location: string; dates: string; bullets: string[] }[];
-  projects: { name: string; links: Link[]; bullets: string[] }[];
+  header: { name?: string; headline?: string; email?: string; phone?: string; location?: string; links: Link[] };
+  summary: { text?: string; bullets?: string[] } | null;
+  education: { school: string; degree: string; end: string }[];
   skills: { label: string; items: string[] }[];
-  education: { school: string; degree: string; location: string; end: string }[];
+  roles: { title: string; orgline: string; dates: string; bullets: string[] }[];
+  projects: { name: string; name_url?: string; stack?: string; links: Link[]; text: string }[];
 };
 
 const asLinks = (v: any): Link[] =>
@@ -32,195 +34,193 @@ export function buildModel(items: Item[], surface: string): ResumeModel {
   const on = items.filter((i) => i.active && i.surfaces.includes(surface)).sort((a, b) => a.order_no - b.order_no);
   const kids = (k: string) => on.filter((i) => i.kind === "bullet" && i.parent_key === k).map((i) => String(i.content.text));
   const h = on.find((i) => i.kind === "header")?.content ?? {};
+  const s = on.find((i) => i.kind === "summary")?.content;
   return {
-    header: { ...h, links: asLinks(h.links) },
-    summary: on.find((i) => i.kind === "summary")?.content?.text ?? null,
+    header: { name: h.name, headline: h.headline_by_surface?.[surface] ?? h.headline, email: h.email, phone: h.phone, location: h.location, links: asLinks(h.links) },
+    summary: s ? (Array.isArray(s.bullets) ? { bullets: s.bullets } : { text: s.text }) : null,
+    education: on.filter((i) => i.kind === "education").map((e) => ({ school: e.content.school, degree: e.content.degree, end: e.content.end ?? "" })),
+    skills: on.filter((i) => i.kind === "skill_group").map((g) => ({ label: g.content.label, items: g.content.items ?? [] })),
     roles: on.filter((i) => i.kind === "role").map((r) => ({
-      org: r.content.org,
       title: r.content.title_by_surface?.[surface] ?? r.content.title,
-      location: r.content.location ?? "",
-      dates: [r.content.start, r.content.end].filter(Boolean).join(" to "),
+      orgline: r.content.orgline ?? [r.content.org, r.content.location ? `(${r.content.location})` : ""].filter(Boolean).join(" "),
+      dates: [r.content.start, r.content.end].filter(Boolean).join(" - "),
       bullets: kids(r.key),
     })),
     projects: on.filter((i) => i.kind === "project").map((p) => ({
-      name: p.content.name, links: asLinks(p.content.links), bullets: kids(p.key),
+      name: p.content.name,
+      name_url: p.content.name_url,
+      stack: p.content.stack,
+      links: asLinks(p.content.links),
+      text: [p.content.text, ...kids(p.key)].filter(Boolean).join(" "),
     })),
-    skills: on.filter((i) => i.kind === "skill_group").map((s) => ({ label: s.content.label, items: s.content.items ?? [] })),
-    education: on.filter((i) => i.kind === "education").map((e) => e.content),
   };
 }
 
 export function modelToText(m: ResumeModel): string {
-  const out: string[] = [];
   const h = m.header;
-  out.push(h.name ?? "", [h.location, h.email, h.phone].filter(Boolean).join(" | "));
-  out.push((h.links ?? []).map((l) => `${l.label}: ${l.url}`).join(" | "), "");
-  if (m.summary) out.push("SUMMARY", m.summary, "");
-  out.push("EXPERIENCE");
+  const out: string[] = [h.name ?? "", h.headline ?? "", [h.email, h.phone, ...h.links.map((l) => `${l.label}: ${l.url}`), h.location].filter(Boolean).join(" | "), ""];
+  if (m.summary) {
+    out.push("SUMMARY");
+    if (m.summary.bullets) for (const b of m.summary.bullets) out.push(`- ${b}`);
+    else out.push(m.summary.text ?? "");
+    out.push("");
+  }
+  out.push("EDUCATION");
+  for (const e of m.education) out.push(`${e.school} | ${e.end}`, `  ${e.degree}`);
+  out.push("", "SKILLS");
+  for (const s of m.skills) out.push(`${s.label}: ${s.items.join(", ")}`);
+  out.push("", "EXPERIENCE");
   for (const r of m.roles) {
-    out.push(`${r.title}, ${r.org} | ${r.location} | ${r.dates}`);
+    out.push(`${r.title} | ${r.dates}`, `  ${r.orgline}`);
     for (const b of r.bullets) out.push(`- ${b}`);
   }
   if (m.projects.length) {
     out.push("", "PROJECTS");
     for (const p of m.projects) {
-      out.push(`${p.name}${p.links.length ? " | " + p.links.map((l) => `${l.label}: ${l.url}`).join(" | ") : ""}`);
-      for (const b of p.bullets) out.push(`- ${b}`);
+      const links = [p.name_url ? `${p.name}: ${p.name_url}` : "", ...p.links.map((l) => `${l.label}: ${l.url}`)].filter(Boolean);
+      out.push(`- ${p.name}${p.stack ? ` (${p.stack})` : ""}: ${p.text}${links.length ? ` [${links.join(" | ")}]` : ""}`);
     }
   }
-  out.push("", "SKILLS");
-  for (const s of m.skills) out.push(`${s.label}: ${s.items.join(", ")}`);
-  out.push("", "EDUCATION");
-  for (const e of m.education) out.push(`${e.degree}, ${e.school} | ${e.location} | ${e.end}`);
   return out.join("\n");
 }
 
-// Light palette
-const INK = "#2B2B2B";
-const BODY = "#3A3A3A";
-const MUTED = "#7A7A7A";
-const ACCENT = "#3D5A80";
-const RULE = "#C9D3DF";
+// Her template, measured from the original PDFs (points)
+const NAVY = "#1F3864";   // headline, section headings, rules
+const LINK = "#0563C1";   // hyperlinks
+const BLACK = "#000000";
+const MARGIN = 36;        // 0.5in on every side
+const BODY = 9.5;
+const PITCH = 10.95;      // body line spacing
+const F = { r: "Times-Roman", b: "Times-Bold", i: "Times-Italic" };
 
-// Equal margins on every side
-const MARGIN = 40;
-const BODY_SIZE = 9.8;
+type Run = { text: string; font: string; url?: string };
 
-/** Renders once to measure, then spreads any leftover space evenly so the bottom margin matches the others. */
 export async function renderPdf(m: ResumeModel): Promise<{ pdf: Buffer; pages: number }> {
-  const first = await renderOnce(m, 1);
-  if (first.pages !== 1 || first.leftover <= 4 || first.gapTotal <= 0) return { pdf: first.pdf, pages: first.pages };
-  const scale = Math.min(2.2, 1 + (first.leftover - 2) / first.gapTotal);
-  const second = await renderOnce(m, scale);
-  return second.pages === 1 ? { pdf: second.pdf, pages: 1 } : { pdf: first.pdf, pages: first.pages };
-}
-
-async function renderOnce(m: ResumeModel, spread: number): Promise<{ pdf: Buffer; pages: number; leftover: number; gapTotal: number }> {
   const doc = new PDFDocument({
     size: "LETTER",
-    margins: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
+    margins: { top: 28, bottom: 18, left: MARGIN, right: MARGIN },
     bufferPages: true,
     info: { Title: `${m.header.name ?? "Resume"}` },
   });
   const chunks: Buffer[] = [];
   doc.on("data", (c: Buffer) => chunks.push(c));
   const done = new Promise<void>((res) => doc.on("end", () => res()));
-  const W = doc.page.width - 2 * MARGIN;
   const L = MARGIN;
-  const bottom = () => doc.page.height - MARGIN;
-  let gapTotal = 0;
-  const gap = (pts: number) => { gapTotal += pts; doc.y += pts * spread; };
+  const W = doc.page.width - 2 * MARGIN;
+  // pdfkit measures continued text word by word but renders it with space kerning (e.g. "space A"),
+  // which drifts the start of the next styled run. Drop kern pairs that involve a space so both agree.
+  for (const f of Object.values(F)) {
+    doc.font(f);
+    const afm = (doc as any)._font?.font;
+    if (afm?.kernPairs) for (const k of Object.keys(afm.kernPairs)) if (/(^|\0)space(\0|$)/.test(k)) delete afm.kernPairs[k];
+  }
+  doc.font(F.r).fontSize(BODY);
+  const GAP = Math.max(0, PITCH - doc.currentLineHeight(true));
 
-  // Section title, a thin rule, then clear space below the rule
-  const section = (title: string) => {
-    gap(9);
-    doc.font("Helvetica-Bold").fontSize(9.5).fillColor(ACCENT).text(title.toUpperCase(), L, doc.y, { characterSpacing: 1.4 });
-    gap(2.5);
-    doc.moveTo(L, doc.y).lineTo(L + W, doc.y).lineWidth(0.5).strokeColor(RULE).stroke();
-    gap(6);
-  };
-
-  // Heading row: bold title + muted org on the left; muted details or clickable links on the right
-  const row = (title: string, sub: string, right: string | Link[]) => {
-    const links = Array.isArray(right) ? right : null;
-    const sep = "  ·  ";
-    doc.font("Helvetica").fontSize(9);
-    const rightText: string = links ? links.map((l) => l.label).join(sep) : (right as string);
-    const rw = rightText ? doc.widthOfString(rightText) : 0;
-    const leftW = W - rw - 14;
-    doc.font("Helvetica-Bold").fontSize(10.2);
-    const lh = doc.heightOfString(sub ? `${title}  ${sub}` : title, { width: leftW });
-    if (doc.y + lh > bottom()) doc.addPage();
-    const y = doc.y;
-    if (links) {
-      let x = L + W - rw;
-      links.forEach((l, i) => {
-        doc.font("Helvetica").fontSize(9).fillColor(ACCENT).text(l.label, x, y + 0.6, { lineBreak: false });
-        const lw = doc.widthOfString(l.label);
-        doc.link(x, y, lw, doc.currentLineHeight(true) + 1, l.url);
-        x += lw;
-        if (i < links.length - 1) {
-          doc.fillColor(MUTED).text(sep, x, y + 0.6, { lineBreak: false });
-          x += doc.widthOfString(sep);
-        }
-      });
-    } else if (rightText) {
-      doc.font("Helvetica").fontSize(9).fillColor(MUTED).text(rightText, L, y + 0.6, { width: W, align: "right", lineBreak: false });
+  // Mixed-style paragraph (bold / italic / regular / link runs) wrapped inside [x, x+w]
+  const para = (input: Run[], x: number, w: number) => {
+    // Merge neighbouring runs of the same style; pdfkit can break lines at run boundaries
+    const runs: Run[] = [];
+    for (const r of input.filter((r) => r.text)) {
+      const prev = runs[runs.length - 1];
+      if (prev && prev.font === r.font && prev.url === r.url) prev.text += r.text;
+      else runs.push({ ...r });
     }
-    doc.font("Helvetica-Bold").fontSize(10.2).fillColor(INK).text(title, L, y, { width: leftW, continued: !!sub });
-    if (sub) doc.font("Helvetica").fontSize(10.2).fillColor(MUTED).text(`  ${sub}`);
-    gap(2);
+    doc.fontSize(BODY);
+    runs.forEach((r, idx) => {
+      const last = idx === runs.length - 1;
+      doc.font(r.font).fillColor(r.url ? LINK : BLACK);
+      const opts: any = { continued: !last, lineGap: GAP, underline: !!r.url, link: r.url ?? null };
+      if (idx === 0) doc.text(r.text, x, doc.y, { ...opts, width: w });
+      else doc.text(r.text, opts);
+    });
+    doc.fillColor(BLACK);
   };
 
-  // Bullet with a hanging indent: small accent dot, then the text block
-  const bullet = (t: string) => {
-    doc.font("Helvetica").fontSize(BODY_SIZE);
-    const bh = doc.heightOfString(t, { width: W - 12, lineGap: 1.2 });
-    if (doc.y + bh > bottom()) doc.addPage();
+  const section = (title: string) => {
+    doc.y += 5.35;
+    const top = doc.y;
+    doc.font(F.b).fontSize(12).fillColor(NAVY).text(title.toUpperCase(), L, top, { lineBreak: false });
+    doc.moveTo(L, top + 13.4).lineTo(L + W, top + 13.4).lineWidth(0.75).strokeColor(NAVY).stroke();
+    doc.y = top + 17.2;
+    doc.fillColor(BLACK);
+  };
+
+  // Bold left text with bold right-aligned text on the same line
+  const splitRow = (left: string, right: string) => {
     const y = doc.y;
-    doc.fillColor(ACCENT).text("•", L + 2, y, { lineBreak: false });
-    doc.fillColor(BODY).text(t, L + 12, y, { width: W - 12, lineGap: 1.2 });
-    gap(2.2);
+    doc.font(F.b).fontSize(BODY).fillColor(BLACK);
+    if (right) doc.text(right, L, y, { width: W, align: "right", lineBreak: false });
+    doc.text(left, L, y, { width: W - (right ? doc.widthOfString(right) + 12 : 0), lineGap: GAP });
+  };
+
+  const bullet = (runs: Run[]) => {
+    const y = doc.y;
+    doc.font(F.r).fontSize(BODY).fillColor(BLACK).text("•", L + 14.4, y, { lineBreak: false });
+    doc.y = y;
+    para(runs, L + 25.2, W - 25.2);
   };
 
   // Header
   const h = m.header;
-  doc.font("Helvetica-Bold").fontSize(20).fillColor(INK).text(h.name ?? "", L, doc.y, { width: W, align: "center", characterSpacing: 0.4 });
-  gap(3);
-  doc.font("Helvetica").fontSize(9.2).fillColor(MUTED).text([h.location, h.email, h.phone].filter(Boolean).join("   |   "), L, doc.y, { width: W, align: "center" });
-  gap(2);
-  const hl = h.links ?? [];
-  if (hl.length) {
-    const sep = "   |   ";
-    doc.font("Helvetica").fontSize(9.2);
-    const total = hl.reduce((a, l, i) => a + doc.widthOfString(l.label) + (i ? doc.widthOfString(sep) : 0), 0);
-    let x = L + (W - total) / 2;
-    const y = doc.y;
-    hl.forEach((l, i) => {
-      if (i) { doc.fillColor(MUTED).text(sep, x, y, { lineBreak: false }); x += doc.widthOfString(sep); }
-      doc.fillColor(ACCENT).text(l.label, x, y, { lineBreak: false });
-      const lw = doc.widthOfString(l.label);
-      doc.link(x, y, lw, doc.currentLineHeight(true) + 1, l.url);
-      x += lw;
-    });
-    doc.x = L;
-    doc.y = y + doc.currentLineHeight(true);
-  }
+  doc.font(F.b).fontSize(20).fillColor(BLACK).text(h.name ?? "", L, 30, { lineBreak: false });
+  doc.y = 28 + 21.6;
+  if (h.headline) { doc.font(F.b).fontSize(11).fillColor(NAVY).text(h.headline, L, doc.y, { width: W }); }
+  doc.y = Math.max(doc.y, 49.8 + 12.5);
+  const contact: Run[] = [];
+  const pieces: Run[] = [
+    ...(h.email ? [{ text: h.email, font: F.r }] : []),
+    ...(h.phone ? [{ text: h.phone, font: F.r }] : []),
+    ...h.links.map((l) => ({ text: l.label, font: F.r, url: l.url })),
+    ...(h.location ? [{ text: h.location, font: F.r }] : []),
+  ];
+  pieces.forEach((p, i) => { if (i) contact.push({ text: " | ", font: F.r }); contact.push(p); });
+  para(contact, L, W);
 
   if (m.summary) {
     section("Summary");
-    doc.font("Helvetica").fontSize(BODY_SIZE).fillColor(BODY).text(m.summary, L, doc.y, { width: W, lineGap: 1.2 });
+    if (m.summary.bullets) for (const b of m.summary.bullets) bullet([{ text: b, font: F.r }]);
+    else para([{ text: m.summary.text ?? "", font: F.r }], L, W);
   }
 
-  section("Experience");
-  m.roles.forEach((r, i) => {
-    if (i) gap(6);
-    row(r.title, r.org, [r.location, r.dates].filter(Boolean).join("   |   "));
-    r.bullets.forEach(bullet);
-  });
+  if (m.education.length) {
+    section("Education");
+    for (const e of m.education) {
+      splitRow(e.school, e.end);
+      doc.font(F.i).fontSize(BODY).text(e.degree, L + 14.4, doc.y, { width: W - 14.4, lineGap: GAP });
+    }
+  }
 
-  if (m.projects.length) {
-    section("Projects");
-    m.projects.forEach((p, i) => {
-      if (i) gap(5);
-      row(p.name, "", p.links);
-      p.bullets.forEach(bullet);
+  if (m.skills.length) {
+    section("Skills");
+    for (const s of m.skills) para([{ text: `${s.label}: `, font: F.b }, { text: s.items.join(", "), font: F.r }], L, W);
+  }
+
+  if (m.roles.length) {
+    section("Experience");
+    m.roles.forEach((r, i) => {
+      if (i) doc.y += 0.95;
+      splitRow(r.title, r.dates);
+      doc.font(F.i).fontSize(BODY).fillColor(BLACK).text(r.orgline, L + 10, doc.y, { width: W - 10, lineGap: GAP });
+      for (const b of r.bullets) bullet([{ text: b, font: F.r }]);
     });
   }
 
-  section("Skills");
-  m.skills.forEach((s, i) => {
-    if (i) gap(2.5);
-    doc.font("Helvetica-Bold").fontSize(BODY_SIZE).fillColor(INK).text(`${s.label}:  `, L, doc.y, { width: W, continued: true, lineGap: 1.2 })
-      .font("Helvetica").fillColor(BODY).text(s.items.join(", "));
-  });
-
-  section("Education");
-  for (const e of m.education) row(e.degree, "", [e.school, e.end].filter(Boolean).join("   |   "));
+  if (m.projects.length) {
+    section("Projects");
+    for (const p of m.projects) {
+      const runs: Run[] = [{ text: p.name, font: F.b, url: p.name_url }];
+      if (p.stack) runs.push({ text: ` (${p.stack})`, font: F.b });
+      for (const l of p.links) runs.push({ text: " | ", font: F.b }, { text: l.label, font: F.b, url: l.url });
+      // Keep the colon glued to whatever precedes it so it never starts a line
+      runs[runs.length - 1].text += ": ";
+      runs.push({ text: p.text, font: F.r });
+      bullet(runs);
+    }
+  }
 
   const pages = doc.bufferedPageRange().count;
-  const leftover = bottom() - doc.y;
   doc.end();
   await done;
-  return { pdf: Buffer.concat(chunks), pages, leftover, gapTotal };
+  return { pdf: Buffer.concat(chunks), pages };
 }
