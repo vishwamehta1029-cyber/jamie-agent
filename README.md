@@ -17,7 +17,9 @@ Jamie is my personal agent. Think of him as a second brain that does the work fo
 | [`src/server.ts`](src/server.ts) | Core tools: memory, applications, contacts, emails, guardrails |
 | [`src/projectLab.ts`](src/projectLab.ts) | Project Lab: 12 tools to finish, deploy, improve and suggest for her projects |
 | [`agents/project-lab.md`](agents/project-lab.md) | Project Lab agent spec |
-| [`src/scout.ts`](src/scout.ts) | Scout: 6 tools to find, filter and rank job postings and track skill demand |
+| [`src/scout.ts`](src/scout.ts) | Scout: 8 tools to find, filter and rank job postings and track skill demand |
+| [`src/scoutParse.ts`](src/scoutParse.ts) | Scout's code-only extraction: years, skills, degree, salary, location, reposts, agencies |
+| [`src/scoutAts.ts`](src/scoutAts.ts) | Reads Greenhouse, Lever and Ashby job boards through their public APIs |
 | [`agents/scout.md`](agents/scout.md) | Scout agent spec |
 | [`src/brain.ts`](src/brain.ts) | Turns the database into one readable "brain" file |
 | [`src/schema.ts`](src/schema.ts) | The brain's tables and default limits |

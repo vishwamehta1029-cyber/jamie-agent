@@ -121,17 +121,14 @@ Project Lab takes her projects to **shipped**, then improves them. Full spec: `a
 
 ## Workflow 5: Scout (find and rank jobs)
 
-Scout finds fresh, strong-fit roles and hands Jamie a ranked shortlist. It never applies. Full spec: `agents/scout.md`.
+Scout finds fresh, strong-fit roles and hands Jamie a ranked shortlist. **Code does the reading, filtering and scoring; you only copy LinkedIn pages and present results.** It never applies. Full spec: `agents/scout.md`.
 
-1. `jamie_scout_run` action `start`. It returns the live rules (freshness window, agencies) and the experience preference.
-2. Sources in order: her LinkedIn saved jobs, LinkedIn search for target titles, YC Work at a Startup, company career pages.
-3. For every posting: open it, check for a Reposted label and the original posted date, quote the experience line exactly, note skills, hiring manager, location and salary, rate `title_match` and `skill_overlap` (0 to 5) from Jamie's brain only. Then `jamie_scout_add_job`. The server filters, scores and saves it; accept its verdict.
-4. `jamie_scout_run` action `finish`.
-5. **QA before showing her:** `jamie_scout_qa` action `sample`, open each sampled link, record each result. Any failure sends the whole batch back for re-checking.
-6. Show her `jamie_scout_shortlist`: company, role, score, why it fits, resume type, flags, link.
-7. `jamie_scout_skill_demand` feeds Project Lab's ideas (skills employers want that her brain doesn't show yet).
-
-Never guess experience or posted dates. Never pad the list with weak matches.
+1. First time only: `jamie_scout_watch` action `seed` (repeat while `remaining` > 0). Add a company any time with `jamie_scout_watch` action `add` and its careers URL or name.
+2. `jamie_scout_sweep`, repeated with the same `run_id` while `remaining_companies` > 0. This reads every watched company's job board directly.
+3. Her LinkedIn saved jobs (and any LinkedIn or YC job she points to): open each, `get_page_text`, and pass the text as-is to `jamie_scout_add_job` with the same `run_id`. Don't judge or summarize; the server reads it.
+4. `jamie_scout_qa` action `check`. Re-open only the LinkedIn sample it returns and `record` each result.
+5. `jamie_scout_run` action `finish`, then show `jamie_scout_shortlist`: company, role, score, why it fits, resume type, flags, link.
+6. `jamie_scout_skill_demand` feeds Project Lab's ideas.
 
 ## Working with ChatGPT
 

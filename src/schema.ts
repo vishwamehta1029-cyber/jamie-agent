@@ -209,8 +209,26 @@ CREATE TABLE IF NOT EXISTS scout_runs (
   query TEXT,
   status TEXT NOT NULL DEFAULT 'running',
   notes TEXT,
+  stats JSONB NOT NULL DEFAULT '{}'::jsonb,
   started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   finished_at TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS scout_watchlist (
+  id SERIAL PRIMARY KEY,
+  company TEXT NOT NULL,
+  ats TEXT NOT NULL,
+  token TEXT NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  source TEXT NOT NULL DEFAULT 'manual',
+  last_checked_at TIMESTAMPTZ,
+  last_jobs INT,
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (ats, token)
+);
+CREATE TABLE IF NOT EXISTS scout_watchlist_misses (
+  company TEXT PRIMARY KEY,
+  tried_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS jobs (
   id SERIAL PRIMARY KEY,
@@ -245,6 +263,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   application_id INT REFERENCES applications(id),
   qa_checked BOOLEAN NOT NULL DEFAULT FALSE,
   qa_result TEXT,
+  extracted JSONB NOT NULL DEFAULT '{}'::jsonb,
   found_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
