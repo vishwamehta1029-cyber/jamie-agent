@@ -36,7 +36,7 @@ const overlap = (a: string, b: string) => {
 };
 
 export async function findDuplicate(company: string, role: string, url?: string | null) {
-  const rows = await q("SELECT id, company, role, url, status, submitted_at FROM applications WHERE lower(company) = lower($1) AND status NOT IN ('skipped','failed')", [company]);
+  const rows = await q("SELECT id, company, role, url, status, submitted_at FROM applications WHERE lower(company) = lower($1) AND status NOT IN ('skipped','failed','retry')", [company]);
   return (rows as any[]).find((r) => (url && r.url === url) || normRole(r.role) === normRole(role)) ?? null;
 }
 
@@ -125,6 +125,21 @@ export function registerAdministratorTools(server: McpServer) {
   );
 
   server.registerTool(
+    "jamie_admin_signed_in",
+    {
+      description: "Administrator: Vishwa has signed in to the sites of jobs that were handed off (Workday, iCIMS...). Puts those jobs back in the queue so the next run applies to them using her signed-in session. Pass application_ids, or omit to retry every handoff that needed a sign-in.",
+      inputSchema: { application_ids: z.array(z.number().int()).optional() },
+    },
+    async ({ application_ids }) => {
+      const rows = application_ids?.length
+        ? await q("UPDATE applications SET status = 'retry', updated_at = now() WHERE status = 'handoff' AND id = ANY($1::int[]) RETURNING id, company, role, job_id", [application_ids])
+        : await q("UPDATE applications SET status = 'retry', updated_at = now() WHERE status = 'handoff' AND handoff_reason ~* 'sign|account|log ?in' RETURNING id, company, role, job_id", []);
+      for (const r of rows as any[]) if (r.job_id) await q("UPDATE jobs SET status = 'shortlisted' WHERE id::text = $1", [r.job_id]);
+      return ok({ back_in_queue: rows, next: "The next run applies to these using her signed-in session." });
+    }
+  );
+
+  server.registerTool(
     "jamie_admin_unpause",
     {
       description: "Administrator: restart autopilot after it paused itself. Only when Vishwa says so in chat.",
@@ -193,6 +208,7 @@ export function registerAdministratorTools(server: McpServer) {
         if (m.used >= m.cap) return ok({ stop: true, reason: `daily mass cap reached (${m.used}/${m.cap}); tell Vishwa and stop mass apps for today` });
       }
       const ats = detectAts(a.url);
+      const signedIn = await one("SELECT id FROM applications WHERE status = 'retry' AND lower(company) = lower($1) LIMIT 1", [a.company]);
       const pv = pickVariant(a.role, a.job_description ?? "");
       const range = extractSalary(a.job_description ?? "");
       const autopilot = (await getSetting("admin_autopilot")) !== false;
@@ -203,8 +219,10 @@ export function registerAdministratorTools(server: McpServer) {
       );
       if (a.scout_job_id) await q("UPDATE jobs SET status = 'handed_off' WHERE id = $1", [a.scout_job_id]);
       const lessons = await q("SELECT lesson FROM lessons WHERE topic = $1 OR topic = 'ats:any' ORDER BY id DESC LIMIT 15", [`ats:${ats}`]);
-      const play = ATS_PLAYBOOK[ats];
+      const play = { ...ATS_PLAYBOOK[ats] };
+      if (signedIn) { play.handoff = undefined; await q("UPDATE applications SET status = 'skipped', notes = concat_ws(E'\\n', notes, 'Retried after Vishwa signed in') WHERE id = $1", [signedIn.id]); }
       return ok({
+        vishwa_signed_in: !!signedIn,
         application_id: app.id,
         autopilot,
         resume: { variant: pv.variant, filename: RESUME_FILES[pv.variant], why: pv.why },
