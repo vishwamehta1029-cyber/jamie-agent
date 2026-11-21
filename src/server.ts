@@ -741,6 +741,8 @@ export function buildServer() {
         scout_max_age_hours: z.number().int().min(1).max(720).optional().describe("Scout freshness window in hours"),
         scout_exclude_agencies: z.boolean().optional().describe("Scout rejects staffing and recruiting agency postings"),
         admin_autopilot: z.boolean().optional().describe("Administrator applies and submits without stopping for approval (Vishwa turned this on Nov 20, 2026)"),
+        admin_run_cap: z.number().int().min(1).max(45).optional().describe("Most applications Administrator submits in one run"),
+        admin_max_failure_streak: z.number().int().min(1).max(10).optional().describe("Failed applications in a row before autopilot pauses itself"),
       },
     },
     async (s) => {
