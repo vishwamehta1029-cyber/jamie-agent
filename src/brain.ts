@@ -167,6 +167,23 @@ export async function renderBrain(): Promise<string> {
     out.push(scoutSkills.map((s: any) => `${s.skill} (${s.n})`).join(", ") + "\n");
   }
 
+  const [styItems, styChanges] = await Promise.all([
+    q("SELECT key, kind, surfaces, version, updated_at FROM stylist_items WHERE active ORDER BY kind, order_no"),
+    q("SELECT id, summary, status, created_at, published_at FROM stylist_changes ORDER BY id DESC LIMIT 20"),
+  ]);
+  out.push(`## Stylist\n`);
+  out.push(`${styItems.length} live resume and portfolio items. Resumes: fde, ai_engineer, gtm. Portfolio feed: /public/portfolio.json\n`);
+  if (styChanges.length) out.push(table(["#", "Change", "Status", "Published"], styChanges, (c) => [c.id, c.summary, c.status, day(c.published_at)]));
+
+  const [admApps, admHandoffs] = await Promise.all([
+    q("SELECT company, role, resume_used, tier, submitted_at FROM applications WHERE status = 'submitted' AND autopilot ORDER BY submitted_at DESC LIMIT 15"),
+    q("SELECT company, role, handoff_reason FROM applications WHERE status = 'handoff' ORDER BY updated_at DESC"),
+  ]);
+  out.push(`## Administrator\n`);
+  out.push(`Applies end to end on autopilot. Resume, factual answers, salary, duplicates and caps are decided in code.\n`);
+  if (admHandoffs.length) out.push(`**Waiting on Vishwa:**\n\n` + table(["Company", "Role", "Why"], admHandoffs, (r) => [r.company, r.role, r.handoff_reason]));
+  if (admApps.length) out.push(table(["Company", "Role", "Resume", "Tier", "Submitted"], admApps, (r) => [r.company, r.role, r.resume_used, r.tier, day(r.submitted_at)]));
+
   out.push(`## Guardrail Settings\n`);
   out.push(table(["Setting", "Value"], settings, (r) => [r.key, JSON.stringify(r.value)]));
 
