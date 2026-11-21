@@ -409,6 +409,29 @@ export function registerScoutTools(server: McpServer) {
   );
 
   server.registerTool(
+    "jamie_scout_known",
+    {
+      description: "Scout: before opening saved LinkedIn jobs one by one, send the list as it appears on the Jobs tracker page (company, role, LinkedIn job id). Returns which ones are new and need opening; jobs Jamie already has queued or applied to are skipped, so the run doesn't reopen them.",
+      inputSchema: {
+        items: z.array(z.object({ company: z.string(), role: z.string(), external_id: z.string().optional(), url: z.string().optional() })).max(100),
+      },
+    },
+    async ({ items }) => {
+      const out: any[] = [];
+      for (const it of items) {
+        const job = await findDuplicate({ source: "linkedin_saved", external_id: it.external_id ?? null, url: it.url ?? `https://www.linkedin.com/jobs/view/${it.external_id ?? ""}/`, company: it.company, role: it.role });
+        const app = await one(
+          "SELECT id, status FROM applications WHERE lower(company) = lower($1) AND status NOT IN ('skipped','failed') AND (lower(role) = lower($2) OR ($3::text IS NOT NULL AND (job_id = $3 OR url LIKE '%' || $3 || '%'))) LIMIT 1",
+          [it.company.trim(), it.role.trim(), it.external_id ?? null]
+        );
+        const state = app ? `application ${app.status}` : job ? `already in Jamie (${job.status})` : "new";
+        out.push({ ...it, state, open_it: state === "new" });
+      }
+      return ok({ new: out.filter((x) => x.open_it).length, known: out.filter((x) => !x.open_it).length, items: out });
+    }
+  );
+
+  server.registerTool(
     "jamie_scout_add_job",
     {
       description:
