@@ -53,7 +53,7 @@ These are outside autopilot by design. Administrator hands them off (`jamie_admi
 - CAPTCHAs or bot checks
 - A brain fact behind a standard answer was retired (the field is `blocked` until the brain is fixed)
 
-Vishwa sees handoffs in `jamie_start_session` and `jamie_admin_report`.
+Vishwa sees handoffs in `jamie_start_session` and `jamie_admin_report`. Jobs that need a sign-in are left alone. When she says she has signed in, call `jamie_admin_signed_in`: those jobs go back in the queue and the next run applies with her signed-in session (no handoff the second time).
 
 ## 5. Fail-safes (server-side, the AI can't bypass them)
 
