@@ -3,6 +3,7 @@ import { z } from "zod";
 import { promises as dns } from "node:dns";
 import { q, one, getSetting, setSetting, tsOr } from "./db.js";
 import { registerProjectLabTools, activeProject, progress as labProgress } from "./projectLab.js";
+import { registerScoutTools, shortlistCount } from "./scout.js";
 
 const ok = (data: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
@@ -107,7 +108,7 @@ export function applyPattern(pattern: string, first: string, last: string, domai
 }
 
 export function buildServer() {
-  const server = new McpServer({ name: "jamie", version: "0.4.0" });
+  const server = new McpServer({ name: "jamie", version: "0.5.0" });
 
   server.registerTool(
     "jamie_start_session",
@@ -142,6 +143,7 @@ export function buildServer() {
         platform,
         last_handoff: handoff,
         project_lab: lab ? await labProgress(lab.id) : null,
+        scout: { shortlisted_waiting: await shortlistCount() },
         guardrails: await guardrailStatus(),
         pending_applications: awaiting,
         sends_needing_bounce_check: needCheck,
@@ -730,8 +732,10 @@ export function buildServer() {
         company_bounce_cap: z.number().int().optional(),
         daily_send_limit: z.number().int().optional(),
         max_patterns_per_person: z.number().int().optional(),
-        max_years_experience: z.number().int().optional().describe("Skip roles whose minimum required experience is above this"),
+        max_years_experience: z.number().int().optional().describe("Scout preference: roles asking for fewer than this many years rank higher. Never a hard filter."),
         guessing_paused: z.boolean().optional(),
+        scout_max_age_hours: z.number().int().min(1).max(720).optional().describe("Scout freshness window in hours"),
+        scout_exclude_agencies: z.boolean().optional().describe("Scout rejects staffing and recruiting agency postings"),
       },
     },
     async (s) => {
@@ -766,6 +770,7 @@ export function buildServer() {
   );
 
   registerProjectLabTools(server);
+  registerScoutTools(server);
 
   return server;
 }

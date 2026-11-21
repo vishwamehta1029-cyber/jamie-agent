@@ -152,6 +152,21 @@ export async function renderBrain(): Promise<string> {
     ]));
   }
 
+  const [scoutJobs, scoutSkills] = await Promise.all([
+    q("SELECT * FROM jobs WHERE status IN ('shortlisted','handed_off') ORDER BY status, fit_score DESC LIMIT 100"),
+    q(`SELECT s.skill, count(DISTINCT s.job_id) n FROM job_skills s JOIN jobs j ON j.id = s.job_id
+       WHERE j.found_at > now() - interval '30 days' AND j.status <> 'rejected' GROUP BY s.skill ORDER BY n DESC LIMIT 20`),
+  ]);
+  out.push(`## Scout\n`);
+  if (!scoutJobs.length) out.push("_No shortlisted jobs._\n");
+  else out.push(table(["#", "Company", "Role", "Score", "Resume", "Status", "Flags", "Link"], scoutJobs, (j) => [
+    j.id, j.real_employer ? `${j.real_employer} (via ${j.company})` : j.company, j.role, j.fit_score, j.resume, j.status, (j.flags || []).join("; "), j.url,
+  ]));
+  if (scoutSkills.length) {
+    out.push(`### Skills employers ask for (last 30 days)\n`);
+    out.push(scoutSkills.map((s: any) => `${s.skill} (${s.n})`).join(", ") + "\n");
+  }
+
   out.push(`## Guardrail Settings\n`);
   out.push(table(["Setting", "Value"], settings, (r) => [r.key, JSON.stringify(r.value)]));
 
