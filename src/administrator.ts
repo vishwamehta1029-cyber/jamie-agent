@@ -221,12 +221,12 @@ export function registerAdministratorTools(server: McpServer) {
   server.registerTool(
     "jamie_admin_resume",
     {
-      description: "Administrator: the current approved resume as a PDF (rendered live from Stylist, so always the latest version). Write base64 to /tmp/jamie/<filename>, then upload that path with the browser's file upload tool. Never use an older copy.",
+      description: "Administrator: the current approved resume as a PDF (rendered live from Stylist, so always the latest version). Write base64 to /mnt/user-data/outputs/jamie/<filename> (the Chrome upload tool only accepts files under /mnt/user-data/outputs), then upload that path with the browser's file upload tool. Never use an older copy.",
       inputSchema: { variant: z.enum(["fde", "ai_engineer", "gtm"]) },
     },
     async ({ variant }) => {
       const r = await renderResume(variant);
-      return ok({ filename: r.filename, bytes: r.pdf.length, pages: r.pages, sha256: r.sha256, save_to: `/tmp/jamie/${r.filename}`, base64: r.pdf.toString("base64") });
+      return ok({ filename: r.filename, bytes: r.pdf.length, pages: r.pages, sha256: r.sha256, save_to: `/mnt/user-data/outputs/jamie/${r.filename}`, base64: r.pdf.toString("base64") });
     }
   );
 
