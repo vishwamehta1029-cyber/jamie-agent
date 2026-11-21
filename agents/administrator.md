@@ -30,15 +30,18 @@ Administrator applies to jobs end to end. It takes the next job from Scout, uplo
 
 ## 3. The loop
 
+0. `jamie_admin_start_run` first. `stop` → report the reason and end.
 1. `jamie_admin_queue` → pick the top job.
 2. Gmail search for a past confirmation or outreach to the company (connector step). Found one → `jamie_admin_done` skipped.
-3. `jamie_admin_prepare` with the posting text. `skip` or `stop` → do what it says. `handoff` → `jamie_admin_done` handoff.
+3. `jamie_admin_prepare` with the posting text and the `run_id`. `skip` or `stop` → do what it says. `handoff` → `jamie_admin_done` handoff.
 4. Upload the resume (section 2).
 5. Read every field on every page. Send them all to `jamie_admin_fill` with label, type, options, required, max_chars.
 6. Fill `filled` exactly as given. Write `needs_writing` from brain facts, mirroring the posting's keywords. Run `jamie_admin_check`; fix until clean.
 7. Submit. Wait for the confirmation page.
 8. `jamie_admin_done` submitted, with every answer and its source (`standard:*`, `bank`, `resume`, `written`).
-9. Any ATS quirk learned → `jamie_add_lesson` topic `ats:<name>`.
+9. Something broke and it was not submitted → `jamie_admin_done` outcome `failed` with the reason.
+10. Any ATS quirk learned → `jamie_add_lesson` topic `ats:<name>`.
+11. Repeat until the queue is empty or a `stop`, then `jamie_admin_finish_run` and put its summary in the handoff.
 
 ## 4. What still stops it
 
@@ -50,6 +53,22 @@ These are outside autopilot by design. Administrator hands them off (`jamie_admi
 
 Vishwa sees handoffs in `jamie_start_session` and `jamie_admin_report`.
 
-## 5. Review after the fact
+## 5. Fail-safes (server-side, the AI can't bypass them)
+
+| Guard | Default | What happens |
+|---|---|---|
+| Per-run cap (`admin_run_cap`) | 15 | `prepare` returns stop |
+| Daily mass cap (`mass_apps_daily_cap`) | 45 | `prepare` returns stop |
+| Failure circuit breaker (`admin_max_failure_streak`) | 3 in a row | Autopilot pauses itself; every later run stops until Vishwa says to unpause (`jamie_admin_unpause`) |
+| Crash recovery | after 2 hours | A half-done application from a crashed run goes to Vishwa as a handoff and is treated as a duplicate, so it is never submitted twice |
+| Duplicate check | always | Same company + role, or same URL, is skipped |
+| Answer checks | always | Written answers with invented numbers, em dashes or inflated titles are refused at submit |
+| Off switch | `admin_autopilot` | Set false to stop autopilot entirely |
+
+## 6. Unattended runs
+
+A scheduled task runs the loop daily on Vishwa's computer (it needs her Chrome). It must run with automatic approval: Claude in Chrome only uploads files when the chat is in auto mode.
+
+## 7. Review after the fact
 
 `jamie_admin_report` shows what was submitted, every answer Jamie wrote, and handoffs waiting. Written answers are saved to the answer bank as unapproved; once Vishwa reads them she can approve the good ones for reuse.

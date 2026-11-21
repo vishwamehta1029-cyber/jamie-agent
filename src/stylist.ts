@@ -233,6 +233,19 @@ const DISPLAY: Record<string, string> = {
 };
 const display = (s: string) => DISPLAY[s] ?? s.replace(/\b\w/g, (c) => c.toUpperCase());
 
+/** Loads the starting content once. Safe to call any time: does nothing if content exists. */
+export async function seedStylist(): Promise<number> {
+  const n = Number((await one("SELECT count(*) n FROM stylist_items")).n);
+  if (n) return 0;
+  for (const it of STYLIST_SEED as any) {
+    await q(
+      "INSERT INTO stylist_items (key, kind, parent_key, surfaces, content, fact_ids, order_no) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (key) DO NOTHING",
+      [it.key, it.kind, it.parent_key, it.surfaces, JSON.stringify(it.content), it.fact_ids, it.order_no]
+    );
+  }
+  return STYLIST_SEED.length;
+}
+
 export async function stylistPendingCount() {
   return Number((await one("SELECT count(*) n FROM stylist_changes WHERE status IN ('pending','blocked')"))?.n ?? 0);
 }
@@ -247,12 +260,7 @@ export function registerStylistTools(server: McpServer) {
     async () => {
       const n = Number((await one("SELECT count(*) n FROM stylist_items")).n);
       if (n) return ok({ refused: true, reason: `Stylist already has ${n} items.` });
-      for (const it of STYLIST_SEED as any) {
-        await q(
-          "INSERT INTO stylist_items (key, kind, parent_key, surfaces, content, fact_ids, order_no) VALUES ($1,$2,$3,$4,$5,$6,$7)",
-          [it.key, it.kind, it.parent_key, it.surfaces, JSON.stringify(it.content), it.fact_ids, it.order_no]
-        );
-      }
+      await seedStylist();
       const items = await loadItems();
       const fit: Record<string, number> = {};
       for (const s of RESUME_SURFACES) fit[s] = (await renderPdf(buildModel(items, s))).pages;

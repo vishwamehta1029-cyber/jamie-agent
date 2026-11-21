@@ -310,4 +310,19 @@ ALTER TABLE applications ADD COLUMN IF NOT EXISTS autopilot BOOLEAN NOT NULL DEF
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS handoff_reason TEXT;
 CREATE INDEX IF NOT EXISTS applications_company_idx ON applications (lower(company));
 INSERT INTO settings (key, value) VALUES ('admin_autopilot', 'true') ON CONFLICT (key) DO NOTHING;
+
+-- Administrator fail-safes (Nov 20, 2026): runs, per-run cap, failure circuit breaker
+CREATE TABLE IF NOT EXISTS admin_runs (
+  id SERIAL PRIMARY KEY,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ,
+  cap INT NOT NULL,
+  trigger TEXT,
+  summary JSONB
+);
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS run_id INT;
+INSERT INTO settings (key, value) VALUES ('admin_run_cap', '15') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('admin_max_failure_streak', '3') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('admin_failure_streak', '0') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('admin_paused_reason', 'null') ON CONFLICT (key) DO NOTHING;
 `;
