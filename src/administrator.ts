@@ -141,11 +141,11 @@ export function registerAdministratorTools(server: McpServer) {
   server.registerTool(
     "jamie_admin_queue",
     {
-      description: "Administrator: the next jobs to apply to, best first, from Scout's shortlist. Duplicates are already removed in code; each comes with its resume pick and ATS.",
+      description: "Administrator: the next jobs to apply to. Vishwa's LinkedIn saved jobs come first (her picks), then Scout's shortlist by fit. Duplicates are already removed in code; each comes with its resume pick and ATS. If it's empty, read her LinkedIn Jobs tracker (Saved) and add each job with jamie_scout_add_job source linkedin_saved.",
       inputSchema: { limit: z.number().int().min(1).max(50).optional() },
     },
     async ({ limit }) => {
-      const jobs = await q("SELECT id, company, role, url, fit_score, fit_reason, status, resume FROM jobs WHERE status IN ('shortlisted','handed_off') ORDER BY fit_score DESC NULLS LAST, id LIMIT 200");
+      const jobs = await q("SELECT id, company, role, url, fit_score, fit_reason, status, resume, source FROM jobs WHERE status IN ('shortlisted','handed_off') ORDER BY (source = 'linkedin_saved') DESC, fit_score DESC NULLS LAST, id LIMIT 200");
       const out: any[] = [];
       for (const j of jobs as any[]) {
         if (out.length >= (limit ?? 10)) break;
@@ -153,9 +153,12 @@ export function registerAdministratorTools(server: McpServer) {
         if (dup) { await q("UPDATE jobs SET status = 'applied' WHERE id = $1 AND $2::text = 'submitted'", [j.id, dup.status]); continue; }
         const ats = detectAts(j.url);
         const pv = ["fde", "ai_engineer", "gtm"].includes(j.resume) ? { variant: j.resume as Variant } : pickVariant(j.role);
-        out.push({ scout_job_id: j.id, company: j.company, role: j.role, url: j.url, ats, resume: RESUME_FILES[pv.variant], fit: j.fit_score, why: j.fit_reason, needs_vishwa: ATS_PLAYBOOK[ats]?.handoff ?? null });
+        out.push({ scout_job_id: j.id, her_pick: j.source === "linkedin_saved", company: j.company, role: j.role, url: j.url, ats, resume: RESUME_FILES[pv.variant], fit: j.fit_score, why: j.fit_reason, needs_vishwa: ATS_PLAYBOOK[ats]?.handoff ?? null });
       }
-      return ok({ autopilot: (await getSetting("admin_autopilot")) !== false, mass_apps: await massToday(), queue: out });
+      return ok({
+        autopilot: (await getSetting("admin_autopilot")) !== false, mass_apps: await massToday(), queue: out,
+        ...(out.length ? {} : { next: "Queue is empty: open https://www.linkedin.com/jobs-tracker/ (Saved), and for each saved job open it, get_page_text, and send it to jamie_scout_add_job with source linkedin_saved and external_id = the LinkedIn job id. Then call jamie_admin_queue again." }),
+      });
     }
   );
 

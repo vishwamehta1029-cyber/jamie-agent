@@ -188,6 +188,15 @@ export async function evaluate(j: RawJob, r: Rules, skills: Set<string>): Promis
   const rtype = resumeType(j.role);
   if (rtype === "ask") flags.push("resume choice unclear, ask Vishwa");
 
+  // Her own saved jobs are her decision: only "already applied" rejects one; every other rule becomes a flag
+  if (picked) {
+    const all = reasons.splice(0);
+    for (const why of all) {
+      if (/already applied/.test(why)) reasons.push(why);
+      else flags.push(`her pick despite: ${why}`);
+    }
+  }
+
   const salary = j.salary_min && j.salary_max ? { min: j.salary_min, max: j.salary_max } : extractSalary(text);
   return {
     verdict: reasons.length ? "rejected" : "shortlisted",

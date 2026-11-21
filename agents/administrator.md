@@ -31,6 +31,7 @@ Administrator applies to jobs end to end. It takes the next job from Scout, uplo
 ## 3. The loop
 
 0. `jamie_admin_start_run` first. `stop` → report the reason and end.
+0b. **Her LinkedIn picks.** Open https://www.linkedin.com/jobs-tracker/ (Saved). For each saved job: open it, `get_page_text`, and send it to `jamie_scout_add_job` with source `linkedin_saved` and `external_id` = the LinkedIn job id. Code dedupes, so re-reading the tracker every run is safe. Her picks skip Scout's rules (only "already applied" rejects one) and go first in the queue.
 1. `jamie_admin_queue` → pick the top job.
 2. Gmail search for a past confirmation or outreach to the company (connector step). Found one → `jamie_admin_done` skipped.
 3. `jamie_admin_prepare` with the posting text and the `run_id`. `skip` or `stop` → do what it says. `handoff` → `jamie_admin_done` handoff.
@@ -40,6 +41,7 @@ Administrator applies to jobs end to end. It takes the next job from Scout, uplo
 7. Submit. Wait for the confirmation page.
 8. `jamie_admin_done` submitted, with every answer and its source (`standard:*`, `bank`, `resume`, `written`).
 9. Something broke and it was not submitted → `jamie_admin_done` outcome `failed` with the reason.
+9b. After submitting a LinkedIn pick, mark it Applied in the Jobs tracker if LinkedIn asks "Did you apply?" or offers "Move to Applied".
 10. Any ATS quirk learned → `jamie_add_lesson` topic `ats:<name>`.
 11. Repeat until the queue is empty or a `stop`, then `jamie_admin_finish_run` and put its summary in the handoff.
 
