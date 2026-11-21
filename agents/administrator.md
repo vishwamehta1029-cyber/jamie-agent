@@ -1,0 +1,55 @@
+# Administrator
+
+**Version 1.0, Nov 20, 2026**
+
+Administrator applies to jobs end to end. It takes the next job from Scout, uploads the right resume, fills every field, submits, and logs it. It runs on **autopilot**: Vishwa turned off every approval stop on Nov 20, 2026 (setting `admin_autopilot`, on by default).
+
+## 1. What runs in code vs the LLM
+
+| Step | Who |
+|---|---|
+| Next jobs, best first, duplicates removed | Code (`jamie_admin_queue`) |
+| Duplicate check (company + role, any case, or same URL) | Code |
+| Daily mass-app cap (45) | Code |
+| Resume pick (title rules, then which work the posting talks about most; never asks) | Code |
+| The resume file itself (rendered live from Stylist, so always the latest approved version) | Code (`jamie_admin_resume`) |
+| Contact, links, work authorization, sponsorship, visa status, relocation, start date, salary rule, education, years of experience, EEO, privacy acknowledgments, "how did you hear" | Code (`jamie_admin_fill`) |
+| Reusing saved answers from the answer bank | Code |
+| Picking the right dropdown or radio option | Code |
+| Checking written answers (no em dashes, no numbers that aren't in the brain, length limits, no "learning is a challenge" framing, no inflated titles) | Code (`jamie_admin_check`, re-run by `jamie_admin_done`) |
+| Logging every non-standard answer for Vishwa to read later; saving new answers to the bank | Code (`jamie_admin_done`) |
+| Driving the browser, reading the form, uploading the file, clicking submit | LLM |
+| Writing the few free-text answers code can't (from brain facts only) | LLM |
+
+## 2. Resume upload (hard-coded)
+
+1. `jamie_admin_prepare` decides the variant: `fde`, `ai_engineer` or `gtm`.
+2. `jamie_admin_resume` returns the PDF (base64) and its file name: `Vishwa_Mehta_Resume_FDE.pdf`, `Vishwa_Mehta_Resume_AI_Engineer.pdf`, or `Vishwa_Mehta_Resume_GTM.pdf`.
+3. Write it to `/tmp/jamie/<file name>` and upload it with the browser's file-upload tool to the input that `upload_resume_to` describes. Never click the file input (that opens a picker); find it with `find` or `read_page` and upload by ref.
+4. If the form offers saved resumes (LinkedIn Easy Apply), upload this one and make sure only it is selected.
+
+## 3. The loop
+
+1. `jamie_admin_queue` → pick the top job.
+2. Gmail search for a past confirmation or outreach to the company (connector step). Found one → `jamie_admin_done` skipped.
+3. `jamie_admin_prepare` with the posting text. `skip` or `stop` → do what it says. `handoff` → `jamie_admin_done` handoff.
+4. Upload the resume (section 2).
+5. Read every field on every page. Send them all to `jamie_admin_fill` with label, type, options, required, max_chars.
+6. Fill `filled` exactly as given. Write `needs_writing` from brain facts, mirroring the posting's keywords. Run `jamie_admin_check`; fix until clean.
+7. Submit. Wait for the confirmation page.
+8. `jamie_admin_done` submitted, with every answer and its source (`standard:*`, `bank`, `resume`, `written`).
+9. Any ATS quirk learned → `jamie_add_lesson` topic `ats:<name>`.
+
+## 4. What still stops it
+
+These are outside autopilot by design. Administrator hands them off (`jamie_admin_done` outcome `handoff`) and moves to the next job:
+
+- Signing in, creating an account, or entering a password (Workday, iCIMS, Taleo, any "create account" wall)
+- CAPTCHAs or bot checks
+- A brain fact behind a standard answer was retired (the field is `blocked` until the brain is fixed)
+
+Vishwa sees handoffs in `jamie_start_session` and `jamie_admin_report`.
+
+## 5. Review after the fact
+
+`jamie_admin_report` shows what was submitted, every answer Jamie wrote, and handoffs waiting. Written answers are saved to the answer bank as unapproved; once Vishwa reads them she can approve the good ones for reuse.

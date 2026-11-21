@@ -5,6 +5,7 @@ import { q, one, getSetting, setSetting, tsOr } from "./db.js";
 import { registerProjectLabTools, activeProject, progress as labProgress } from "./projectLab.js";
 import { registerScoutTools, shortlistCount } from "./scout.js";
 import { registerStylistTools, stylistPendingCount } from "./stylist.js";
+import { registerAdministratorTools, adminStatus } from "./administrator.js";
 
 const ok = (data: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
@@ -109,7 +110,7 @@ export function applyPattern(pattern: string, first: string, last: string, domai
 }
 
 export function buildServer() {
-  const server = new McpServer({ name: "jamie", version: "0.6.0" });
+  const server = new McpServer({ name: "jamie", version: "0.7.0" });
 
   server.registerTool(
     "jamie_start_session",
@@ -146,6 +147,7 @@ export function buildServer() {
         project_lab: lab ? await labProgress(lab.id) : null,
         scout: { shortlisted_waiting: await shortlistCount() },
         stylist: { changes_waiting_for_vishwa: await stylistPendingCount() },
+        administrator: await adminStatus(),
         guardrails: await guardrailStatus(),
         pending_applications: awaiting,
         sends_needing_bounce_check: needCheck,
@@ -738,6 +740,7 @@ export function buildServer() {
         guessing_paused: z.boolean().optional(),
         scout_max_age_hours: z.number().int().min(1).max(720).optional().describe("Scout freshness window in hours"),
         scout_exclude_agencies: z.boolean().optional().describe("Scout rejects staffing and recruiting agency postings"),
+        admin_autopilot: z.boolean().optional().describe("Administrator applies and submits without stopping for approval (Vishwa turned this on Nov 20, 2026)"),
       },
     },
     async (s) => {
@@ -774,6 +777,7 @@ export function buildServer() {
   registerProjectLabTools(server);
   registerScoutTools(server);
   registerStylistTools(server);
+  registerAdministratorTools(server);
 
   return server;
 }

@@ -302,4 +302,12 @@ CREATE TABLE IF NOT EXISTS stylist_changes (
   decided_at TIMESTAMPTZ,
   published_at TIMESTAMPTZ
 );
+
+-- Administrator: applies end to end; autopilot set by Vishwa on Nov 20, 2026
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS jd_text TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS source TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS autopilot BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS handoff_reason TEXT;
+CREATE INDEX IF NOT EXISTS applications_company_idx ON applications (lower(company));
+INSERT INTO settings (key, value) VALUES ('admin_autopilot', 'true') ON CONFLICT (key) DO NOTHING;
 `;
