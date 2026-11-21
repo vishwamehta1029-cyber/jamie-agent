@@ -43,6 +43,7 @@ const fmtDate = (d: Date) => `${String(d.getMonth() + 1).padStart(2, "0")}/${Str
 
 // Order matters: the first match wins.
 export const STANDARD: Std[] = [
+  { id: "full_name_combo", match: /first\s*(&|and|\+|\/)\s*last|full legal name|legal name\b(?!.*(first|last))/i, facts: [1], value: () => "Vishwa Mehta" },
   { id: "first_name", match: /\b(first|given|legal first) name\b/i, facts: [1], value: () => "Vishwa" },
   { id: "last_name", match: /\b(last|family|sur) ?name\b/i, facts: [1], value: () => "Mehta" },
   { id: "preferred_name", match: /\bpreferred (first )?name\b/i, facts: [1], value: () => "Vishwa" },
@@ -110,10 +111,13 @@ export type Filled = { label: string; value: string; source: string; fact_ids: n
 /** Answer one question from the standard table. Returns null when it needs the answer bank or writing. */
 export function resolveStandard(qn: Question, ctx: Ctx, activeFacts: Set<number>): Filled | { label: string; blocked: string } | null {
   const label = qn.label.replace(/\s+/g, " ").trim();
-  // Long free-text prompts are never standard, even if they mention a keyword
-  if ((qn.type === "textarea" || label.length > 140) && !/cover letter/i.test(label)) return null;
+  // Long free-text prompts are never standard, even if they mention a keyword. Long yes/no logistics
+  // questions (sponsorship with visa examples, authorization, relocation) still are.
+  const longOk = new Set(["authorized", "sponsorship", "visa_status", "citizen", "relocate", "noncompete", "age_18", "privacy_ack", "previously_worked", "travel"]);
+  const isLong = (qn.type === "textarea" || label.length > 140) && !/cover letter/i.test(label);
   for (const s of STANDARD) {
     if (!s.match.test(label) || (s.not && s.not.test(label))) continue;
+    if (isLong && (qn.type === "textarea" || !longOk.has(s.id))) return null;
     const missing = s.facts.filter((f) => !activeFacts.has(f));
     if (missing.length) return { label, blocked: `${s.id}: brain fact ${missing.join(", ")} was retired; check the brain before answering` };
     let value = s.value(ctx);
@@ -169,7 +173,7 @@ export const ATS_PLAYBOOK: Record<string, { resume: string; notes: string[]; han
   workday: { resume: "My Experience step, 'Select files'", notes: [], handoff: "Workday needs an account sign-in; hand to Vishwa" },
   icims: { resume: "upload step after sign-in", notes: [], handoff: "iCIMS needs an account; hand to Vishwa" },
   taleo: { resume: "upload step after sign-in", notes: [], handoff: "Taleo needs an account; hand to Vishwa" },
-  linkedin: { resume: "Easy Apply 'Upload resume' (input[type=file]); deselect older resumes so only this one is checked", notes: ["Easy Apply keeps answers from past applications: check each prefilled value against the standard answers"] },
+  linkedin: { resume: "Easy Apply 'Upload resume'. The new UI has no file input until that button runs, and clicking it opens a picker: first patch HTMLInputElement.prototype.click in javascript_tool so a type=file input is appended to document.body instead of opening, then call the button's .click() from JS, find the new file input and upload by ref. The new copy is auto-selected", notes: ["Easy Apply keeps answers from past applications: check each prefilled value against the standard answers", "Open saved jobs one at a time; a burst gets LinkedIn rate-limited (429)"] },
   other: { resume: 'the input[type=file] nearest a "Resume" or "CV" label', notes: ["If the form asks to create an account, stop and hand off"] },
 };
 

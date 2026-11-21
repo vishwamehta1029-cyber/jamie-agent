@@ -25,7 +25,7 @@ Administrator applies to jobs end to end. It takes the next job from Scout, uplo
 
 1. `jamie_admin_prepare` decides the variant: `fde`, `ai_engineer` or `gtm`.
 2. `jamie_admin_resume` returns the PDF (base64) and its file name: `Vishwa_Mehta_Resume_FDE.pdf`, `Vishwa_Mehta_Resume_AI_Engineer.pdf`, or `Vishwa_Mehta_Resume_GTM.pdf`.
-3. Write it to `/tmp/jamie/<file name>` and upload it with the browser's file-upload tool to the input that `upload_resume_to` describes. Never click the file input (that opens a picker); find it with `find` or `read_page` and upload by ref.
+3. Write it to `/mnt/user-data/outputs/jamie/<file name>` (the Chrome upload tool only accepts files under `/mnt/user-data/outputs`) and upload it with the browser's file-upload tool to the input that `upload_resume_to` describes. Never click the file input (that opens a picker); find it with `find` or `read_page` and upload by ref.
 4. If the form offers saved resumes (LinkedIn Easy Apply), upload this one and make sure only it is selected.
 
 ## 3. The loop
