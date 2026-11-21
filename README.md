@@ -24,7 +24,7 @@ Jamie is my personal agent. Think of him as a second brain that does the work fo
 | [`src/stylist.ts`](src/stylist.ts) | Stylist: 7 tools that keep the resumes and portfolio current, with honesty checks in code |
 | [`src/stylistResume.ts`](src/stylistResume.ts) | Builds one-page resume PDFs from the database |
 | [`agents/stylist.md`](agents/stylist.md) | Stylist agent spec |
-| [`src/administrator.ts`](src/administrator.ts) | Administrator: 7 tools that apply to jobs end to end on autopilot (resume upload, every factual answer, checks and logging in code) |
+| [`src/administrator.ts`](src/administrator.ts) | Administrator: 10 tools that apply to jobs end to end on autopilot (resume upload, every factual answer, checks and logging in code) |
 | [`src/adminRules.ts`](src/adminRules.ts) | Standard answers, resume pick, salary rule and answer checks, all plain code |
 | [`agents/administrator.md`](agents/administrator.md) | Administrator agent spec |
 | [`src/brain.ts`](src/brain.ts) | Turns the database into one readable "brain" file |
