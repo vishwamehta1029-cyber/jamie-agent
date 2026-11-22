@@ -325,4 +325,61 @@ INSERT INTO settings (key, value) VALUES ('admin_run_cap', '15') ON CONFLICT (ke
 INSERT INTO settings (key, value) VALUES ('admin_max_failure_streak', '3') ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('admin_failure_streak', '0') ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('admin_paused_reason', 'null') ON CONFLICT (key) DO NOTHING;
+
+-- Postman: outreach for the jobs Vishwa selects, 25 relevant people per company (Nov 22, 2026)
+CREATE TABLE IF NOT EXISTS postman_campaigns (
+  id SERIAL PRIMARY KEY,
+  application_id INT REFERENCES applications(id),
+  company TEXT NOT NULL,
+  role TEXT NOT NULL,
+  domain TEXT,
+  job_url TEXT,
+  job_location TEXT,
+  resume_variant TEXT NOT NULL,
+  target INT NOT NULL DEFAULT 25,
+  status TEXT NOT NULL DEFAULT 'finding',
+  stop_reason TEXT,
+  approved_quote TEXT,
+  approved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS postman_campaign_open_idx ON postman_campaigns (lower(company), lower(role)) WHERE status NOT IN ('stopped', 'done');
+CREATE TABLE IF NOT EXISTS postman_people (
+  id SERIAL PRIMARY KEY,
+  campaign_id INT NOT NULL REFERENCES postman_campaigns(id),
+  name TEXT NOT NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  title TEXT NOT NULL,
+  location TEXT,
+  linkedin_url TEXT,
+  source TEXT,
+  evidence TEXT,
+  public_email TEXT,
+  bucket TEXT NOT NULL,
+  score NUMERIC NOT NULL,
+  cta TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'candidate',
+  reason TEXT,
+  contact_id INT REFERENCES contacts(id),
+  email TEXT,
+  email_source TEXT,
+  email_confidence TEXT,
+  pattern TEXT,
+  wave INT,
+  subject TEXT,
+  html TEXT,
+  body TEXT,
+  sha256 TEXT,
+  send_id INT REFERENCES sends(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS postman_people_name_idx ON postman_people (campaign_id, lower(name));
+INSERT INTO settings (key, value) VALUES ('postman_target', '25') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('postman_recruiter_share', '0.4') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('postman_canary_size', '3') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('postman_min_gap_seconds', '20') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('postman_gmail_daily_ceiling', '450') ON CONFLICT (key) DO NOTHING;
 `;
