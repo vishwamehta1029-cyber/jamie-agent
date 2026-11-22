@@ -1,8 +1,10 @@
 # Administrator
 
-**Version 1.0, Nov 20, 2026**
+**Version 1.1, Nov 21, 2026**
 
 Administrator applies to jobs end to end. It takes the next job from Scout, uploads the right resume, fills every field, submits, and logs it. It runs on **autopilot**: Vishwa turned off every approval stop on Nov 20, 2026 (setting `admin_autopilot`, on by default).
+
+**Run minimum (hard guardrail, Vishwa, Nov 21, 2026): every run submits at least 20 relevant applications.** See section 4.
 
 ## 1. What runs in code vs the LLM
 
@@ -31,7 +33,8 @@ Administrator applies to jobs end to end. It takes the next job from Scout, uplo
 ## 3. The loop
 
 0. `jamie_admin_start_run` first. `stop` → report the reason and end.
-0b. **Her LinkedIn picks.** Open https://www.linkedin.com/jobs-tracker/ (Saved). For each saved job: open it, `get_page_text`, and send it to `jamie_scout_add_job` with source `linkedin_saved` and `external_id` = the LinkedIn job id. Code dedupes, so re-reading the tracker every run is safe. Her picks skip Scout's rules (only "already applied" rejects one) and go first in the queue.
+0b. **Her LinkedIn picks.** Open https://www.linkedin.com/jobs-tracker/ (Saved), pages 1 and 2 only. Send the list to `jamie_scout_known`, open only the new ones, and send each to `jamie_scout_add_job` with source `linkedin_saved` and `external_id` = the LinkedIn job id. Her picks skip Scout's rules (only "already applied" rejects one) and go first in the queue.
+0c. **Scout LinkedIn search** (see `agents/scout.md`). Scout's shortlist follows her picks in the queue.
 1. `jamie_admin_queue` → pick the top job.
 2. Gmail search for a past confirmation or outreach to the company (connector step). Found one → `jamie_admin_done` skipped.
 3. `jamie_admin_prepare` with the posting text and the `run_id`. `skip` or `stop` → do what it says. `handoff` → `jamie_admin_done` handoff.
@@ -43,9 +46,34 @@ Administrator applies to jobs end to end. It takes the next job from Scout, uplo
 9. Something broke and it was not submitted → `jamie_admin_done` outcome `failed` with the reason.
 9b. After submitting a LinkedIn pick, mark it Applied in the Jobs tracker if LinkedIn asks "Did you apply?" or offers "Move to Applied".
 10. Any ATS quirk learned → `jamie_add_lesson` topic `ats:<name>`.
-11. Repeat until the queue is empty or a `stop`, then `jamie_admin_finish_run` and put its summary in the handoff.
+11. **Refill (section 4):** if the queue empties before 20 submitted, send Scout back to LinkedIn for more, then continue the loop.
+12. Stop only when 20 or more are submitted, or a limit in section 4 is hit. Then `jamie_admin_finish_run` and put its summary in the handoff.
 
-## 4. What still stops it
+## 4. Run minimum: 20 relevant applications
+
+**Rule.** Every run keeps going until at least 20 relevant applications are **submitted** (confirmation page seen, `jamie_admin_done` outcome `submitted`). Skips, handoffs and failures do not count toward the 20.
+
+**Relevant** means the job is one of her LinkedIn picks, or Scout's code shortlisted it (passed every hard rule in `agents/scout.md`). Administrator never lowers Scout's bar to reach 20: no reposts, agencies, CS-degree-required, non-US, pure software engineering or already-applied jobs.
+
+**Refill loop.** When the queue runs out before 20:
+
+1. Scout opens the next results page (page 2, then page 3) of each target-title search.
+2. Then Scout runs the extra title searches in `agents/scout.md` section 4.
+3. New shortlisted jobs go into the queue; Administrator keeps applying.
+4. Repeat until 20 are submitted or the sources are exhausted.
+
+**Limits the minimum never overrides.** If one of these blocks the 20, Administrator stops, says how many were submitted and why it fell short in the handoff, and notifies Vishwa:
+
+- No sign-ins, passwords, account creation or CAPTCHAs (those stay handoffs)
+- No invented facts or dishonest answers; `jamie_admin_check` must pass
+- No re-applying (duplicate check)
+- The daily mass-app cap (45) and the failure circuit breaker
+- LinkedIn rate limiting (429 or pages not loading after one wait and retry)
+- All search pages exhausted with no new shortlisted jobs
+
+**Cap.** `admin_run_cap` must be at least 20 (currently 25) so the server doesn't stop the run early.
+
+## 5. What still stops it
 
 These are outside autopilot by design. Administrator hands them off (`jamie_admin_done` outcome `handoff`) and moves to the next job:
 
@@ -55,11 +83,11 @@ These are outside autopilot by design. Administrator hands them off (`jamie_admi
 
 Vishwa sees handoffs in `jamie_start_session` and `jamie_admin_report`. Jobs that need a sign-in are left alone. When she says she has signed in, call `jamie_admin_signed_in`: those jobs go back in the queue and the next run applies with her signed-in session (no handoff the second time).
 
-## 5. Fail-safes (server-side, the AI can't bypass them)
+## 6. Fail-safes (server-side, the AI can't bypass them)
 
 | Guard | Default | What happens |
 |---|---|---|
-| Per-run cap (`admin_run_cap`) | 15 | `prepare` returns stop |
+| Per-run cap (`admin_run_cap`) | 25 (must stay 20 or more for the run minimum) | `prepare` returns stop |
 | Daily mass cap (`mass_apps_daily_cap`) | 45 | `prepare` returns stop |
 | Failure circuit breaker (`admin_max_failure_streak`) | 3 in a row | Autopilot pauses itself; every later run stops until Vishwa says to unpause (`jamie_admin_unpause`) |
 | Crash recovery | after 2 hours | A half-done application from a crashed run goes to Vishwa as a handoff and is treated as a duplicate, so it is never submitted twice |
@@ -67,10 +95,10 @@ Vishwa sees handoffs in `jamie_start_session` and `jamie_admin_report`. Jobs tha
 | Answer checks | always | Written answers with invented numbers, em dashes or inflated titles are refused at submit |
 | Off switch | `admin_autopilot` | Set false to stop autopilot entirely |
 
-## 6. Unattended runs
+## 7. Unattended runs
 
-A scheduled task runs the loop daily on Vishwa's computer (it needs her Chrome). It must run with automatic approval: Claude in Chrome only uploads files when the chat is in auto mode.
+A scheduled task runs the loop daily on Vishwa's computer (it needs her Chrome). It must run with automatic approval: Claude in Chrome only uploads files when the chat is in auto mode. A run that ends with fewer than 20 submitted pushes a notification to Vishwa with the count and the reason.
 
-## 7. Review after the fact
+## 8. Review after the fact
 
 `jamie_admin_report` shows what was submitted, every answer Jamie wrote, and handoffs waiting. Written answers are saved to the answer bank as unapproved; once Vishwa reads them she can approve the good ones for reuse.
