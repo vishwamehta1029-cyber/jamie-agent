@@ -175,7 +175,9 @@ async function apolloCreditsToday(): Promise<number> {
 
 /** Turns a noun-phrase one-liner into the "I am really interested in ..." line. null when it isn't one; the LLM writes those. */
 const VERBS = new Set(["turn", "build", "make", "help", "get", "find", "automate", "run", "create", "stop", "let", "bring", "give", "use", "put", "take", "save", "hire", "ship", "scale", "grow", "track", "manage", "connect", "monitor", "deploy", "replace", "close", "book", "answer", "write", "generate", "never", "talk", "chat", "sell", "buy", "pay", "launch", "meet", "your", "we", "our", "transform", "unlock", "power", "supercharge", "empower", "streamline", "accelerate", "simplify", "eliminate", "cut", "reduce", "boost", "win"]);
-const isAcronym = (w: string) => (w.match(/[A-Z]/g) ?? []).length >= 2 || /\d/.test(w);
+const isAcronym = (w: string) => /^[A-Z0-9&/.]{2,}s?$/.test(w) || /^[A-Z]+\d|\d[A-Z]/.test(w);
+/** Lowercase a word, keeping acronyms (AI, B2B, MGAs) and acronym parts of hyphenated words (AI-powered). */
+const lowerWord = (w: string) => w.split("-").map((p) => (isAcronym(p) ? p : p.toLowerCase())).join("-");
 
 export function whyFromOneLiner(name: string, oneLiner?: string | null): string | null {
   if (!oneLiner) return null;
@@ -188,10 +190,9 @@ export function whyFromOneLiner(name: string, oneLiner?: string | null): string 
   if (VERBS.has(first) || (first.endsWith("s") && VERBS.has(firstBase) && !/^(agents|tools|workers|models)$/.test(first))) return null;
   const NOUNISH = /^(the |an? |ai[ -]|agentic |autonomous |agents? |open[- ]source |voice |enterprise |vertical |llm|multi-agent |browser |coding |personal |custom |intelligent |self-|end-to-end )/i;
   if (!NOUNISH.test(s) && !/ (for|to|that|which) /i.test(s)) return null;
-  s = s.replace(/^(the|an?) /i, "");
   const words = s.split(" ");
   const titleCase = words.filter((w) => /^[A-Z]/.test(w)).length / words.length >= 0.6;
-  s = words.map((w, i) => (isAcronym(w) ? w : titleCase || i === 0 ? w.toLowerCase() : w)).join(" ");
+  s = words.map((w, i) => (isAcronym(w) ? w : titleCase || i === 0 ? lowerWord(w) : w)).join(" ");
   return s;
 }
 
