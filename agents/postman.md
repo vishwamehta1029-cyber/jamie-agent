@@ -63,6 +63,8 @@ If the template in the answer bank changes, `jamie_postman_build` refuses until 
 9. Loop: `jamie_postman_next` → Gmail `send_message` with the payload exactly as returned → `jamie_postman_sent`. On `wait`, start the next company and come back.
 10. Bounce checks at 1 hour and 24 hours as usual (`jamie_mark_bounce_checked` or `jamie_record_bounce`).
 
+**25 people per job (Vishwa, Nov 22, 2026).** Two roles at the same company are two campaigns with 25 people each. Nobody is emailed twice, so the second role reaches 25 different people.
+
 Several companies can run side by side: approve all the batches, send every canary wave, then come back an hour later for the rest.
 
 ## 5. Fail-safes (server-side)
