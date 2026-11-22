@@ -142,6 +142,19 @@ Stylist keeps her three resumes (fde, ai_engineer, gtm) and her portfolio curren
 
 Resume links: `https://jamie-mcp.vercel.app/<secret>/resume/<fde|ai_engineer|gtm>.pdf` (always the latest). Use these when applying.
 
+## Workflow 7: Postman (outreach for selected jobs)
+
+Postman emails up to 25 relevant US people at each company for the jobs Vishwa selects. **Code ranks the people, picks the mix, sets the CTA, gives each one address, writes every email from her approved template and controls sending; you search, show her the batch, and send exactly what code returns.** Full spec: `agents/postman.md`.
+
+1. She names the jobs, or show `jamie_postman_queue` and she picks.
+2. Per job: `jamie_postman_start` (company, role, application id, email domain). Follow its search plan: LinkedIn people search (current company, United States, one search per title), the posting, the team page, posts sharing the opening, and Apollo people search (search only, never Access email).
+3. Send everyone found to `jamie_postman_add_people` exactly as shown (name, title, location; `responsible_for_role` or `shared_opening` only with evidence). Keep going until `still_needed` is zero or the company runs out.
+4. Save any public evidence of the email format (`jamie_save_email_pattern`), then `jamie_postman_build`.
+5. Show her the people table, flags and the sample email. Send nothing until she says yes. Then `jamie_postman_approve` with her words, any drops and CTA changes.
+6. `jamie_postman_assets` (thumbnail, then resume); write both to `/mnt/user-data/outputs/jamie/`.
+7. Loop `jamie_postman_next` → Gmail `send_message` with the payload exactly as returned → `jamie_postman_sent`. On `wait`, move to the next company and come back. On `stop`, tell her right away.
+8. Bounce checks at 1 hour and 24 hours as in Workflow 3.
+
 ## Working with ChatGPT
 
 ChatGPT shares the same connector. Vishwa may draft emails or answers there. ChatGPT cannot run git, so Project Lab there is limited to progress, ideas and reviews; building happens in Claude. When picking up, trust the handoff and the answer bank, not chat history. Drafts approved in ChatGPT still go through `jamie_can_send` before sending from here.

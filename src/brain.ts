@@ -184,6 +184,14 @@ export async function renderBrain(): Promise<string> {
   if (admHandoffs.length) out.push(`**Waiting on Vishwa:**\n\n` + table(["Company", "Role", "Why"], admHandoffs, (r) => [r.company, r.role, r.handoff_reason]));
   if (admApps.length) out.push(table(["Company", "Role", "Resume", "Tier", "Submitted"], admApps, (r) => [r.company, r.role, r.resume_used, r.tier, day(r.submitted_at)]));
 
+  const pmCamps = await q(`SELECT c.id, c.company, c.role, c.status, c.updated_at,
+      count(p.*) FILTER (WHERE p.status = 'sent')::int sent, count(p.*) FILTER (WHERE p.status = 'bounced')::int bounced,
+      count(p.*) FILTER (WHERE p.status IN ('picked','approved'))::int unsent
+    FROM postman_campaigns c LEFT JOIN postman_people p ON p.campaign_id = c.id GROUP BY c.id ORDER BY c.updated_at DESC LIMIT 25`);
+  out.push(`## Postman\n`);
+  out.push(`Outreach for jobs Vishwa selects: up to 25 relevant US people per company, every email written in code from her approved template, sent only after she approves the batch. Unconfirmed patterns send a 3 person canary first.\n`);
+  if (pmCamps.length) out.push(table(["#", "Company", "Role", "Status", "Sent", "Bounced", "Unsent", "Updated"], pmCamps, (r) => [r.id, r.company, r.role, r.status, r.sent, r.bounced, r.unsent, day(r.updated_at)]));
+
   out.push(`## Guardrail Settings\n`);
   out.push(table(["Setting", "Value"], settings, (r) => [r.key, JSON.stringify(r.value)]));
 
