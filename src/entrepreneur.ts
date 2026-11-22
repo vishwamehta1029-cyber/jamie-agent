@@ -174,15 +174,24 @@ async function apolloCreditsToday(): Promise<number> {
 // ---------- The company-specific line ----------
 
 /** Turns a noun-phrase one-liner into the "I am really interested in ..." line. null when it isn't one; the LLM writes those. */
+const VERBS = new Set(["turn", "build", "make", "help", "get", "find", "automate", "run", "create", "stop", "let", "bring", "give", "use", "put", "take", "save", "hire", "ship", "scale", "grow", "track", "manage", "connect", "monitor", "deploy", "replace", "close", "book", "answer", "write", "generate", "never", "talk", "chat", "sell", "buy", "pay", "launch", "meet", "your", "we", "our", "transform", "unlock", "power", "supercharge", "empower", "streamline", "accelerate", "simplify", "eliminate", "cut", "reduce", "boost", "win"]);
+const isAcronym = (w: string) => (w.match(/[A-Z]/g) ?? []).length >= 2 || /\d/.test(w);
+
 export function whyFromOneLiner(name: string, oneLiner?: string | null): string | null {
   if (!oneLiner) return null;
   let s = oneLiner.trim().replace(/\s+/g, " ").replace(/[.!]+$/, "");
-  if (!s || s.length > 140 || /[—–:;?]/.test(s)) return null;
+  if (!s || s.length > 140 || /[—–:;?"]/.test(s)) return null;
   if (s.toLowerCase().startsWith(name.toLowerCase())) return null;
-  const NOUNISH = /^(the |an? |ai[ -]|agentic |autonomous |agents? |open[- ]source |voice |enterprise |vertical |llm|multi-agent |browser |coding |personal |custom |intelligent |self-|end-to-end |[A-Z][A-Za-z0-9]+ for )/i;
-  if (!NOUNISH.test(s)) return null;
-  if (/^(the|an?) /i.test(s)) s = s.replace(/^(the|an?) /i, "");
-  if (/^[A-Z][a-z]/.test(s) && !/^[A-Z][A-Za-z0-9]+ for /.test(s)) s = s[0].toLowerCase() + s.slice(1);
+  if (/\b(you|your|you're|we|our|us)\b/i.test(s)) return null; // second or first person reads oddly after "interested in"
+  const first = s.split(" ")[0].toLowerCase().replace(/[^a-z-]/g, "");
+  const firstBase = first.replace(/s$/, "");
+  if (VERBS.has(first) || (first.endsWith("s") && VERBS.has(firstBase) && !/^(agents|tools|workers|models)$/.test(first))) return null;
+  const NOUNISH = /^(the |an? |ai[ -]|agentic |autonomous |agents? |open[- ]source |voice |enterprise |vertical |llm|multi-agent |browser |coding |personal |custom |intelligent |self-|end-to-end )/i;
+  if (!NOUNISH.test(s) && !/ (for|to|that|which) /i.test(s)) return null;
+  s = s.replace(/^(the|an?) /i, "");
+  const words = s.split(" ");
+  const titleCase = words.filter((w) => /^[A-Z]/.test(w)).length / words.length >= 0.6;
+  s = words.map((w, i) => (isAcronym(w) ? w : titleCase || i === 0 ? w.toLowerCase() : w)).join(" ");
   return s;
 }
 
