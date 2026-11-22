@@ -27,7 +27,7 @@ Jamie is my personal agent. Think of him as a second brain that does the work fo
 | [`src/administrator.ts`](src/administrator.ts) | Administrator: 10 tools that apply to jobs end to end on autopilot (resume upload, every factual answer, checks and logging in code) |
 | [`src/adminRules.ts`](src/adminRules.ts) | Standard answers, resume pick, salary rule and answer checks, all plain code |
 | [`agents/administrator.md`](agents/administrator.md) | Administrator agent spec |
-| [`src/postman.ts`](src/postman.ts) | Postman: 9 tools that send outreach for selected jobs to 25 relevant people per company (ranking, emails, canary wave and bounce stops in code) |
+| [`src/postman.ts`](src/postman.ts) | Postman: 10 tools that send outreach for selected jobs to 25 relevant people per company (ranking, emails, canary wave and bounce stops in code) |
 | [`agents/postman.md`](agents/postman.md) | Postman agent spec |
 | [`src/brain.ts`](src/brain.ts) | Turns the database into one readable "brain" file |
 | [`src/schema.ts`](src/schema.ts) | The brain's tables and default limits |
