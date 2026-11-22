@@ -383,10 +383,11 @@ INSERT INTO settings (key, value) VALUES ('postman_canary_size', '3') ON CONFLIC
 INSERT INTO settings (key, value) VALUES ('postman_min_gap_seconds', '20') ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('postman_gmail_daily_ceiling', '450') ON CONFLICT (key) DO NOTHING;
 
--- Entrepreneur: YC startups relevant to Vishwa, tracker, founder coffee chat emails (Nov 22, 2026)
-CREATE TABLE IF NOT EXISTS yc_companies (
+-- Entrepreneur: founders of San Francisco startups that build agents, YC or not; 100 a day (Nov 22, 2026)
+CREATE TABLE IF NOT EXISTS ent_companies (
   slug TEXT PRIMARY KEY,
   name TEXT NOT NULL,
+  is_yc BOOLEAN NOT NULL DEFAULT FALSE,
   batch TEXT,
   batch_key INT,
   one_liner TEXT,
@@ -394,43 +395,48 @@ CREATE TABLE IF NOT EXISTS yc_companies (
   website TEXT,
   domain TEXT,
   location TEXT,
-  regions TEXT[] NOT NULL DEFAULT '{}',
   team_size INT,
   industries TEXT[] NOT NULL DEFAULT '{}',
   tags TEXT[] NOT NULL DEFAULT '{}',
   is_hiring BOOLEAN,
   status TEXT,
-  yc_url TEXT,
+  source TEXT,
+  source_url TEXT,
+  apollo_org_id TEXT,
   fit_score NUMERIC,
   fit_reason TEXT,
-  founders JSONB NOT NULL DEFAULT '[]'::jsonb,
   funding_text TEXT,
-  funding_usd BIGINT,
   funding_source TEXT,
-  funding_checked_at TIMESTAMPTZ,
+  founders_checked_at TIMESTAMPTZ,
   track_status TEXT NOT NULL DEFAULT 'found',
   notes TEXT,
-  source TEXT,
   found_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS yc_companies_fit_idx ON yc_companies (track_status, fit_score DESC);
-CREATE TABLE IF NOT EXISTS ent_emails (
+CREATE INDEX IF NOT EXISTS ent_companies_queue_idx ON ent_companies (track_status, fit_score DESC);
+CREATE INDEX IF NOT EXISTS ent_companies_domain_idx ON ent_companies (domain);
+CREATE TABLE IF NOT EXISTS ent_founders (
   id SERIAL PRIMARY KEY,
-  slug TEXT NOT NULL REFERENCES yc_companies(slug),
-  contact_id INT NOT NULL REFERENCES contacts(id),
-  founder_name TEXT NOT NULL,
-  founder_first TEXT NOT NULL,
-  founder_title TEXT,
-  email TEXT NOT NULL,
-  pattern TEXT,
+  company_slug TEXT NOT NULL REFERENCES ent_companies(slug),
+  name TEXT NOT NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  title TEXT,
+  linkedin_url TEXT,
+  source TEXT,
+  contact_id INT REFERENCES contacts(id),
+  email TEXT,
+  email_source TEXT,
+  email_status TEXT,
+  apollo_checked_at TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'found',
   why_line TEXT,
+  why_source TEXT,
   subject TEXT,
   body TEXT,
   html TEXT,
   sha256 TEXT,
   template_id INT,
-  status TEXT NOT NULL DEFAULT 'researched',
   approved_quote TEXT,
   approved_at TIMESTAMPTZ,
   send_id INT REFERENCES sends(id),
@@ -439,6 +445,10 @@ CREATE TABLE IF NOT EXISTS ent_emails (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-INSERT INTO settings (key, value) VALUES ('ent_daily_cap', '10') ON CONFLICT (key) DO NOTHING;
-INSERT INTO settings (key, value) VALUES ('ent_min_score', '40') ON CONFLICT (key) DO NOTHING;
+CREATE UNIQUE INDEX IF NOT EXISTS ent_founders_name_idx ON ent_founders (company_slug, lower(name));
+CREATE INDEX IF NOT EXISTS ent_founders_status_idx ON ent_founders (status);
+INSERT INTO settings (key, value) VALUES ('ent_daily_cap', '100') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('ent_apollo_daily_credits', '100') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('ent_max_founders_per_company', '3') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('ent_apollo_accept', '"verified"') ON CONFLICT (key) DO NOTHING;
 `;
