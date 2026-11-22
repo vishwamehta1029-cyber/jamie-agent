@@ -7,6 +7,7 @@ import { registerScoutTools, shortlistCount } from "./scout.js";
 import { registerStylistTools, stylistPendingCount } from "./stylist.js";
 import { registerAdministratorTools, adminStatus } from "./administrator.js";
 import { registerPostmanTools, postmanStatus } from "./postman.js";
+import { registerEntrepreneurTools, entrepreneurStatus } from "./entrepreneur.js";
 
 const ok = (data: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
@@ -111,7 +112,7 @@ export function applyPattern(pattern: string, first: string, last: string, domai
 }
 
 export function buildServer() {
-  const server = new McpServer({ name: "jamie", version: "0.8.0" });
+  const server = new McpServer({ name: "jamie", version: "0.9.0" });
 
   server.registerTool(
     "jamie_start_session",
@@ -150,6 +151,7 @@ export function buildServer() {
         stylist: { changes_waiting_for_vishwa: await stylistPendingCount() },
         administrator: await adminStatus(),
         postman: await postmanStatus(),
+        entrepreneur: await entrepreneurStatus(),
         guardrails: await guardrailStatus(),
         pending_applications: awaiting,
         sends_needing_bounce_check: needCheck,
@@ -783,6 +785,7 @@ export function buildServer() {
   registerStylistTools(server);
   registerAdministratorTools(server);
   registerPostmanTools(server);
+  registerEntrepreneurTools(server);
 
   return server;
 }

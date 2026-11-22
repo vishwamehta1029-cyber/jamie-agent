@@ -31,7 +31,16 @@ const P_PORTFOLIO = "You can explore my projects and demos in my portfolio.";
 /** Sentences that must still be in the bank template; if she edits it there, Postman refuses until code matches. */
 export const FIXED_SENTENCES = [P_INTRO, P_ABOUT, P_PORTFOLIO, CTA.chat, CTA.refer, "Open to Relocation", "Thank you,"];
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** The portfolio thumbnail card. The image is the first attachment, inline as cid:att0 (Claude's Gmail tool strips external images). */
+export function portfolioCard(): string {
+  return (
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="520" style="width:100%;max-width:520px;border:1px solid #e4e7ec;border-radius:12px;margin:0 0 14px 0;">` +
+    `<tr><td><a href="${PORTFOLIO}" target="_blank"><img src="cid:att0" width="520" alt="Vishwa Mehta’s portfolio: AI projects, live demos, and automation workflows" style="display:block;width:100%;max-width:520px;height:auto;border:0;border-radius:12px 12px 0 0;"></a></td></tr>` +
+    `<tr><td style="padding:14px 16px;font-family:Arial,sans-serif;font-size:14px;line-height:21px;"><a href="${PORTFOLIO}" style="color:#3f61d8;text-decoration:none;font-weight:bold;">Explore my AI projects, live demos, and automation workflows →</a></td></tr></table>`
+  );
+}
 
 export function renderEmail(p: { first: string; role: string; company: string; cta: "chat" | "refer"; to: string }) {
   const subject = `${p.role} at ${p.company} | Open to Relocation`;
@@ -46,10 +55,7 @@ export function renderEmail(p: { first: string; role: string; company: string; c
     "Thank you,\nVishwa Mehta",
   ].join("\n\n");
   const para = (t: string) => `<p style="margin:0 0 14px 0;">${t}</p>`;
-  const card =
-    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="520" style="width:100%;max-width:520px;border:1px solid #e4e7ec;border-radius:12px;margin:0 0 14px 0;">` +
-    `<tr><td><a href="${PORTFOLIO}" target="_blank"><img src="cid:att0" width="520" alt="Vishwa Mehta’s portfolio: AI projects, live demos, and automation workflows" style="display:block;width:100%;max-width:520px;height:auto;border:0;border-radius:12px 12px 0 0;"></a></td></tr>` +
-    `<tr><td style="padding:14px 16px;font-family:Arial,sans-serif;font-size:14px;line-height:21px;"><a href="${PORTFOLIO}" style="color:#3f61d8;text-decoration:none;font-weight:bold;">Explore my AI projects, live demos, and automation workflows →</a></td></tr></table>`;
+  const card = portfolioCard();
   const html =
     `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:21px;color:#1f2328;">` +
     para(`Hi ${esc(p.first)},`) +
@@ -460,12 +466,12 @@ export function registerPostmanTools(server: McpServer) {
     "jamie_postman_assets",
     {
       description: "Postman: the two attachments every email carries, as base64 with sha256: the portfolio thumbnail (inline, cid:att0) and the approved resume for this campaign. Write each to /mnt/user-data/outputs/jamie/<filename> once per session and attach by file reference.",
-      inputSchema: { campaign_id: z.number().int(), part: z.enum(["thumbnail", "resume"]) },
+      inputSchema: { campaign_id: z.number().int().optional().describe("Needed for the resume; the thumbnail is shared with Entrepreneur"), part: z.enum(["thumbnail", "resume"]) },
     },
     async ({ campaign_id, part }) => {
-      const c = await one("SELECT resume_variant FROM postman_campaigns WHERE id = $1", [campaign_id]);
-      if (!c) return ok({ refused: true, reason: "no such campaign" });
       if (part === "resume") {
+        const c = campaign_id ? await one("SELECT resume_variant FROM postman_campaigns WHERE id = $1", [campaign_id]) : null;
+        if (!c) return ok({ refused: true, reason: "the resume needs a campaign_id" });
         const r = await renderResume(c.resume_variant as Variant);
         await setSetting(`postman_asset:${r.filename}`, sha(r.pdf));
         return ok({ filename: r.filename, mimeType: "application/pdf", bytes: r.pdf.length, sha256: sha(r.pdf), save_to: `/mnt/user-data/outputs/jamie/${r.filename}`, base64: r.pdf.toString("base64") });

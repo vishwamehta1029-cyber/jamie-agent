@@ -155,6 +155,17 @@ Postman emails up to 25 relevant US people at each company for the jobs Vishwa s
 7. Loop `jamie_postman_next` → Gmail `send_message` with the payload exactly as returned → `jamie_postman_sent`. On `wait`, move to the next company and come back. On `stop`, tell her right away.
 8. Bounce checks at 1 hour and 24 hours as in Workflow 3.
 
+## Workflow 8: Entrepreneur (YC founders, coffee chats)
+
+Entrepreneur finds YC startups that fit Vishwa, tracks them, and emails one founder per company. **Code scores fit, picks the founder, guesses the address, renders the email from her approved template and gates sending; you read YC pages and the web, copy facts with sources, and write one line per company.** Full spec: `agents/entrepreneur.md`.
+
+1. `jamie_ent_sync`. If YC has a newer batch than `newest_batch_in_feed`, read it at ycombinator.com/companies and add it with `jamie_ent_add_companies`.
+2. `jamie_ent_shortlist`. For each company: founders from its YC page, funding from a public source with the URL (never guess an amount), then `jamie_ent_research`.
+3. Write the why line (finishes "I am really interested in ..."), naming something from the company's own description. `jamie_ent_draft`.
+4. Show her `jamie_ent_review`: every why line and one full email. On her yes, `jamie_ent_approve` with her words.
+5. `jamie_postman_assets` part thumbnail, then loop `jamie_ent_next` → Gmail `send_message` exactly as returned → `jamie_ent_sent`.
+6. Bounce checks as in Workflow 3. Replies and meetings: `jamie_ent_update`. Show the tracker with `jamie_ent_tracker`.
+
 ## Working with ChatGPT
 
 ChatGPT shares the same connector. Vishwa may draft emails or answers there. ChatGPT cannot run git, so Project Lab there is limited to progress, ideas and reviews; building happens in Claude. When picking up, trust the handoff and the answer bank, not chat history. Drafts approved in ChatGPT still go through `jamie_can_send` before sending from here.

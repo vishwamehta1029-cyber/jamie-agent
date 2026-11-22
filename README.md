@@ -29,6 +29,8 @@ Jamie is my personal agent. Think of him as a second brain that does the work fo
 | [`agents/administrator.md`](agents/administrator.md) | Administrator agent spec |
 | [`src/postman.ts`](src/postman.ts) | Postman: 10 tools that send outreach for selected jobs to 25 relevant people per company (ranking, emails, canary wave and bounce stops in code) |
 | [`agents/postman.md`](agents/postman.md) | Postman agent spec |
+| [`src/entrepreneur.ts`](src/entrepreneur.ts) | Entrepreneur: 11 tools that find YC startups that fit, track them (what they do, founders, funding) and email one founder per company for a coffee chat |
+| [`agents/entrepreneur.md`](agents/entrepreneur.md) | Entrepreneur agent spec |
 | [`src/brain.ts`](src/brain.ts) | Turns the database into one readable "brain" file |
 | [`src/schema.ts`](src/schema.ts) | The brain's tables and default limits |
 | [`src/http.ts`](src/http.ts) | Secure endpoint for Claude and ChatGPT |

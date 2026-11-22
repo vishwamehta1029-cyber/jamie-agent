@@ -382,4 +382,63 @@ INSERT INTO settings (key, value) VALUES ('postman_recruiter_share', '0.4') ON C
 INSERT INTO settings (key, value) VALUES ('postman_canary_size', '3') ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('postman_min_gap_seconds', '20') ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('postman_gmail_daily_ceiling', '450') ON CONFLICT (key) DO NOTHING;
+
+-- Entrepreneur: YC startups relevant to Vishwa, tracker, founder coffee chat emails (Nov 22, 2026)
+CREATE TABLE IF NOT EXISTS yc_companies (
+  slug TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  batch TEXT,
+  batch_key INT,
+  one_liner TEXT,
+  description TEXT,
+  website TEXT,
+  domain TEXT,
+  location TEXT,
+  regions TEXT[] NOT NULL DEFAULT '{}',
+  team_size INT,
+  industries TEXT[] NOT NULL DEFAULT '{}',
+  tags TEXT[] NOT NULL DEFAULT '{}',
+  is_hiring BOOLEAN,
+  status TEXT,
+  yc_url TEXT,
+  fit_score NUMERIC,
+  fit_reason TEXT,
+  founders JSONB NOT NULL DEFAULT '[]'::jsonb,
+  funding_text TEXT,
+  funding_usd BIGINT,
+  funding_source TEXT,
+  funding_checked_at TIMESTAMPTZ,
+  track_status TEXT NOT NULL DEFAULT 'found',
+  notes TEXT,
+  source TEXT,
+  found_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS yc_companies_fit_idx ON yc_companies (track_status, fit_score DESC);
+CREATE TABLE IF NOT EXISTS ent_emails (
+  id SERIAL PRIMARY KEY,
+  slug TEXT NOT NULL REFERENCES yc_companies(slug),
+  contact_id INT NOT NULL REFERENCES contacts(id),
+  founder_name TEXT NOT NULL,
+  founder_first TEXT NOT NULL,
+  founder_title TEXT,
+  email TEXT NOT NULL,
+  pattern TEXT,
+  why_line TEXT,
+  subject TEXT,
+  body TEXT,
+  html TEXT,
+  sha256 TEXT,
+  template_id INT,
+  status TEXT NOT NULL DEFAULT 'researched',
+  approved_quote TEXT,
+  approved_at TIMESTAMPTZ,
+  send_id INT REFERENCES sends(id),
+  sent_at TIMESTAMPTZ,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO settings (key, value) VALUES ('ent_daily_cap', '10') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('ent_min_score', '40') ON CONFLICT (key) DO NOTHING;
 `;

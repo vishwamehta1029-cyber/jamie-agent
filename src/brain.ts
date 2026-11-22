@@ -192,6 +192,13 @@ export async function renderBrain(): Promise<string> {
   out.push(`Outreach for jobs Vishwa selects: up to 25 relevant US people per company, every email written in code from her approved template, sent only after she approves the batch. Unconfirmed patterns send a 3 person canary first.\n`);
   if (pmCamps.length) out.push(table(["#", "Company", "Role", "Status", "Sent", "Bounced", "Unsent", "Updated"], pmCamps, (r) => [r.id, r.company, r.role, r.status, r.sent, r.bounced, r.unsent, day(r.updated_at)]));
 
+  const ycRows = await q(`SELECT y.name, y.batch, y.one_liner, (SELECT string_agg(f->>'name', ', ') FROM jsonb_array_elements(y.founders) f) founders,
+      y.funding_text, y.track_status, y.fit_score FROM yc_companies y WHERE y.track_status <> 'found' OR y.fit_score >= 60
+    ORDER BY (y.track_status IN ('emailed','replied','meeting')) DESC, y.fit_score DESC LIMIT 60`);
+  out.push(`## Entrepreneur (YC tracker)\n`);
+  out.push(`YC startups relevant to Vishwa and the founder coffee chat emails. Fit is scored in code; funding is recorded only with a public source.\n`);
+  if (ycRows.length) out.push(table(["Company", "Batch", "What they do", "Founders", "Funding", "Status", "Fit"], ycRows, (r) => [r.name, r.batch, r.one_liner, r.founders ?? "", r.funding_text ?? "", r.track_status, r.fit_score]));
+
   out.push(`## Guardrail Settings\n`);
   out.push(table(["Setting", "Value"], settings, (r) => [r.key, JSON.stringify(r.value)]));
 
