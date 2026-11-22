@@ -155,16 +155,15 @@ Postman emails up to 25 relevant US people at each company for the jobs Vishwa s
 7. Loop `jamie_postman_next` → Gmail `send_message` with the payload exactly as returned → `jamie_postman_sent`. On `wait`, move to the next company and come back. On `stop`, tell her right away.
 8. Bounce checks at 1 hour and 24 hours as in Workflow 3.
 
-## Workflow 8: Entrepreneur (YC founders, coffee chats)
+## Workflow 8: Entrepreneur (SF founders building agents, 100 a day)
 
-Entrepreneur finds YC startups that fit Vishwa, tracks them, and emails one founder per company. **Code scores fit, picks the founder, guesses the address, renders the email from her approved template and gates sending; you read YC pages and the web, copy facts with sources, and write one line per company.** Full spec: `agents/entrepreneur.md`.
+Entrepreneur emails founders of San Francisco startups that build agents, YC or not, for a coffee chat. **Code does the work: YC directory, SF + agents filter, founders from YC pages, public emails, Apollo lookups, the company line when it can, every email and every sending gate.** You fill only the gaps it hands back and get Vishwa's yes. Full spec: `agents/entrepreneur.md`.
 
-1. `jamie_ent_sync`. If YC has a newer batch than `newest_batch_in_feed`, read it at ycombinator.com/companies and add it with `jamie_ent_add_companies`.
-2. `jamie_ent_shortlist`. For each company: founders from its YC page, funding from a public source with the URL (never guess an amount), then `jamie_ent_research`.
-3. Write the why line (finishes "I am really interested in ..."), naming something from the company's own description. `jamie_ent_draft`.
-4. Show her `jamie_ent_review`: every why line and one full email. On her yes, `jamie_ent_approve` with her words.
-5. `jamie_postman_assets` part thumbnail, then loop `jamie_ent_next` → Gmail `send_message` exactly as returned → `jamie_ent_sent`.
-6. Bounce checks as in Workflow 3. Replies and meetings: `jamie_ent_update`. Show the tracker with `jamie_ent_tracker`.
+1. Call `jamie_ent_plan` and do exactly what `next` says. Repeat.
+2. Gaps code hands back: founders for a non-YC company (`jamie_ent_add_founders`, copied as shown, funding only with a source URL); Apollo lookups when there's no API key (`jamie_ent_needs_apollo`, tell her the total credits once, Apollo `people_match` per founder, `jamie_ent_set_email` with Apollo's exact answer); company lines code couldn't write (`jamie_ent_needs_why`, then `jamie_ent_set_why`, naming something from the company's own description).
+3. `jamie_ent_review`: show her the table and one full email. On her yes, `jamie_ent_approve` with her words.
+4. `jamie_postman_assets` part thumbnail, then loop `jamie_ent_next` → Gmail `send_message` exactly as returned → `jamie_ent_sent`, until it waits.
+5. Bounce checks as in Workflow 3. Replies and meetings: `jamie_ent_update`. Tracker: `jamie_ent_tracker`.
 
 ## Working with ChatGPT
 
