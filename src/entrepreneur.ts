@@ -408,7 +408,7 @@ export async function loadTemplate(): Promise<{ template: string; card: string }
 
 // ---------- 8. Gmail ----------
 
-async function gmailToken(): Promise<string> {
+export async function gmailToken(): Promise<string> {
   const r = await fetchText("https://oauth2.googleapis.com/token", 15000, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -423,7 +423,7 @@ async function gmailToken(): Promise<string> {
   return j.access_token;
 }
 
-async function gmail(token: string, path: string, init: RequestInit = {}) {
+export async function gmail(token: string, path: string, init: RequestInit = {}) {
   const r = await fetchText(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, 20000, {
     ...init, headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...(init.headers as any) },
   });
