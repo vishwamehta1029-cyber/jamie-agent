@@ -383,6 +383,17 @@ INSERT INTO settings (key, value) VALUES ('postman_canary_size', '3') ON CONFLIC
 INSERT INTO settings (key, value) VALUES ('postman_min_gap_seconds', '20') ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('postman_gmail_daily_ceiling', '450') ON CONFLICT (key) DO NOTHING;
 -- Entrepreneur: daily cron emails founders of US YC agent startups (Nov 23, 2026). Code end to end; the only LLM call writes the why line.
+-- An older, unmerged Entrepreneur design (PR #14) used the same table names with a different shape. If those tables exist,
+-- keep them under *_pr14 names (nothing is dropped) so the tables below are created fresh.
+DO $ent$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'ent_companies' AND column_name = 'track_status')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'ent_companies' AND column_name = 'yc_slug') THEN
+    ALTER INDEX IF EXISTS ent_founders_name_idx RENAME TO ent_founders_pr14_name_idx;
+    ALTER INDEX IF EXISTS ent_founders_status_idx RENAME TO ent_founders_pr14_status_idx;
+    ALTER TABLE IF EXISTS ent_founders RENAME TO ent_founders_pr14;
+    ALTER TABLE ent_companies RENAME TO ent_companies_pr14;
+  END IF;
+END $ent$;
 CREATE TABLE IF NOT EXISTS ent_companies (
   id SERIAL PRIMARY KEY,
   yc_slug TEXT NOT NULL UNIQUE,
