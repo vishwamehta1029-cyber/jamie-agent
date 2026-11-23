@@ -151,8 +151,8 @@ Postman emails up to 25 relevant US people at each company for the jobs Vishwa s
 3. Send everyone found to `jamie_postman_add_people` exactly as shown (name, title, location; `responsible_for_role` or `shared_opening` only with evidence). Keep going until `still_needed` is zero or the company runs out.
 4. Save any public evidence of the email format (`jamie_save_email_pattern`), then `jamie_postman_build`.
 5. Show her the people table, flags and the sample email. Send nothing until she says yes. Then `jamie_postman_approve` with her words, any drops and CTA changes.
-6. `jamie_postman_assets` (thumbnail, then resume); write both to `/mnt/user-data/outputs/jamie/`.
-7. Loop `jamie_postman_next` → Gmail `send_message` with the payload exactly as returned → `jamie_postman_sent`. On `wait`, move to the next company and come back. On `stop`, tell her right away.
+6. Run `jamie_postman_gmail_check`. If it confirms the sender, call `jamie_postman_next` with `send_via_gmail: true` for each approved message. The server attaches and logs the email.
+7. On `wait`, continue another campaign when available. On an interrupted dispatch, use `jamie_postman_reconcile` before proceeding. Check delivery failures with `jamie_postman_check_bounces` at one and 24 hours.
 8. Bounce checks at 1 hour and 24 hours as in Workflow 3.
 
 ## Workflow 8: Entrepreneur (daily cron, no chat steps)

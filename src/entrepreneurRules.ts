@@ -348,29 +348,40 @@ const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64");
 const wrap76 = (s: string) => s.replace(/.{1,76}/g, (m) => m + "\r\n").trimEnd();
 const encodeHeader = (s: string) => (/^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${b64(s)}?=`);
 
-/** multipart/alternative (text + HTML), base64url for users.messages.send. */
-export function buildMime(m: { from: string; to: string; subject: string; text: string; html: string }, boundary = `jamie_${randomBytes(8).toString("hex")}`): string {
+export type MailAttachment = { filename: string; mimeType: string; data: Buffer; contentId?: string };
+
+/** Create a Gmail API message with text, HTML and optional attachments. */
+export function buildMime(m: {
+  from: string; to: string; subject: string; text: string; html: string; attachments?: MailAttachment[]; messageId?: string;
+}, boundary = `jamie_${randomBytes(8).toString("hex")}`): string {
+  if ([m.from, m.to, m.subject].some((value) => /[\r\n]/.test(value))) throw new Error("Invalid mail header");
+  const alternative = m.attachments?.length ? `${boundary}_alternative` : boundary;
   const lines = [
-    `From: ${m.from}`,
-    `To: ${m.to}`,
-    `Subject: ${encodeHeader(m.subject)}`,
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
-    'Content-Type: text/plain; charset="UTF-8"',
-    "Content-Transfer-Encoding: base64",
-    "",
-    wrap76(b64(m.text)),
-    `--${boundary}`,
-    'Content-Type: text/html; charset="UTF-8"',
-    "Content-Transfer-Encoding: base64",
-    "",
-    wrap76(b64(m.html)),
-    `--${boundary}--`,
-    "",
+    `From: ${m.from}`, `To: ${m.to}`, `Subject: ${encodeHeader(m.subject)}`, "MIME-Version: 1.0",
   ];
-  return Buffer.from(lines.join("\r\n"), "utf8").toString("base64url");
+  if (m.messageId) {
+    if (!/^[a-z0-9_.-]+@[a-z0-9.-]+$/i.test(m.messageId)) throw new Error("Invalid message ID");
+    lines.push(`Message-ID: <${m.messageId}>`);
+  }
+  if (m.attachments?.length) {
+    lines.push(`Content-Type: multipart/mixed; boundary="${boundary}"`, "", `--${boundary}`);
+  }
+  lines.push(
+    `Content-Type: multipart/alternative; boundary="${alternative}"`, "",
+    `--${alternative}`, 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", "", wrap76(b64(m.text)),
+    `--${alternative}`, 'Content-Type: text/html; charset="UTF-8"', "Content-Transfer-Encoding: base64", "", wrap76(b64(m.html)),
+    `--${alternative}--`,
+  );
+  for (const part of m.attachments ?? []) {
+    if (!/^[a-z0-9_.-]+$/i.test(part.filename) || !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(part.mimeType) ||
+        (part.contentId && !/^[a-z0-9_.-]+$/i.test(part.contentId))) throw new Error("Invalid attachment metadata");
+    lines.push(`--${boundary}`, `Content-Type: ${part.mimeType}`, "Content-Transfer-Encoding: base64",
+      `Content-Disposition: ${part.contentId ? "inline" : "attachment"}; filename="${part.filename}"`);
+    if (part.contentId) lines.push(`Content-ID: <${part.contentId}>`);
+    lines.push("", wrap76(part.data.toString("base64")));
+  }
+  if (m.attachments?.length) lines.push(`--${boundary}--`);
+  return Buffer.from([...lines, ""].join("\r\n"), "utf8").toString("base64url");
 }
 
 /** Gmail errors that mean "stop sending for now" (quota, rate, account limits). */

@@ -376,6 +376,7 @@ CREATE TABLE IF NOT EXISTS postman_people (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS postman_single_dispatch_idx ON postman_people (status) WHERE status = 'dispatching';
 CREATE UNIQUE INDEX IF NOT EXISTS postman_people_name_idx ON postman_people (campaign_id, lower(name));
 INSERT INTO settings (key, value) VALUES ('postman_target', '25') ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('postman_recruiter_share', '0.4') ON CONFLICT (key) DO NOTHING;

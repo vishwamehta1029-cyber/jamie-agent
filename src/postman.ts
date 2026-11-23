@@ -8,7 +8,9 @@ import { createHash } from "node:crypto";
 import { promises as dns } from "node:dns";
 import { z } from "zod";
 import { q, one, getSetting, setSetting } from "./db.js";
-import { guardrailStatus, applyPattern, bounceStreakStop } from "./server.js";
+import { guardrailStatus, applyPattern, bounceStreakStop, markBounceChecked, recordBounce } from "./server.js";
+import { gmail, gmailToken } from "./entrepreneur.js";
+import { BOUNCE_QUERY, bounceRecipients, buildMime } from "./entrepreneurRules.js";
 import { renderResume } from "./administrator.js";
 import { pickVariant, RESUME_FILES, type Variant } from "./adminRules.js";
 
@@ -220,6 +222,112 @@ async function sentTodayAll(): Promise<number> {
 }
 
 // ---------- Tools ----------
+
+async function postmanMailbox() {
+  const sender = process.env.GMAIL_SENDER?.trim().toLowerCase();
+  if (!sender || !/^[^\s<>@]+@[^\s<>@]+$/.test(sender)) throw new Error("Configure GMAIL_SENDER in Vercel");
+  const token = await gmailToken();
+  const profile = await gmail(token, "profile");
+  if (profile.status !== 200) throw new Error(`Gmail profile check failed (HTTP ${profile.status})`);
+  if (profile.json?.emailAddress?.toLowerCase() !== sender) throw new Error("Gmail OAuth is connected to a different mailbox than GMAIL_SENDER");
+  return { sender, token };
+}
+
+async function checkPostmanBounces(campaignId: number) {
+  const due = await q(`SELECT s.* FROM sends s JOIN postman_people p ON p.send_id = s.id
+    WHERE p.campaign_id = $1 AND NOT s.bounced
+      AND ((NOT s.checked_1h AND s.sent_at <= now() - interval '1 hour')
+        OR (NOT s.checked_24h AND s.sent_at <= now() - interval '24 hours'))`, [campaignId]);
+  if (!due.length) return 0;
+  const { token } = await postmanMailbox();
+  const oldest = Math.floor(Math.min(...due.map((send) => new Date(send.sent_at).getTime())) / 1000);
+  const query = encodeURIComponent(`${BOUNCE_QUERY.replace(" newer_than:2d", "")} after:${oldest}`);
+  const hits: { addresses: string[]; threadId: string; observedAt: number }[] = [];
+  let pageToken = "";
+  do {
+    const list = await gmail(token, `messages?maxResults=100&q=${query}&pageToken=${encodeURIComponent(pageToken)}`);
+    if (list.status !== 200 || !list.json) throw new Error(`Gmail bounce search failed (HTTP ${list.status})`);
+    for (const message of list.json.messages ?? []) {
+      const result = await gmail(token, `messages/${message.id}?format=full`);
+      const observedAt = Number(result.json?.internalDate);
+      if (result.status !== 200 || !Number.isFinite(observedAt)) throw new Error("Incomplete Gmail bounce check");
+      hits.push({ addresses: bounceRecipients(result.json), threadId: result.json.threadId, observedAt });
+    }
+    pageToken = list.json.nextPageToken ?? "";
+  } while (pageToken);
+  for (const send of due) {
+    const sentAt = new Date(send.sent_at).getTime();
+    const hit = hits.some(({ addresses, threadId, observedAt }) => observedAt >= sentAt &&
+      ((send.gmail_thread_id && threadId === send.gmail_thread_id) || addresses.includes(norm(send.to_email))));
+    if (hit) await recordBounce(send.id, "Gmail delivery failure (Postman check)");
+    else {
+      if (!send.checked_1h) await markBounceChecked(send.id, "1h");
+      if (!send.checked_24h && Date.now() - sentAt >= 86_400_000) await markBounceChecked(send.id, "24h");
+    }
+  }
+  return due.length;
+}
+
+const postmanMessageId = (id: number, hash: string) => `postman.${id}.${hash}@jamie-mcp.vercel.app`;
+
+async function logPostmanDispatch(campaignId: number, p: { id: number; contact_id: number; email: string; subject: string }, messageId: string, threadId?: string) {
+  const logged = await one(`WITH claimed AS (
+      SELECT id FROM postman_people WHERE id = $6 AND status = 'dispatching' FOR UPDATE
+    ), sent AS (
+      INSERT INTO sends (contact_id, to_email, subject, gmail_message_id, gmail_thread_id)
+      SELECT $1,$2,$3,$4,$5 FROM claimed RETURNING id
+    ), person AS (
+      UPDATE postman_people SET status = 'sent', send_id = sent.id, updated_at = now()
+      FROM sent WHERE postman_people.id = $6 AND status = 'dispatching' RETURNING sent.id
+    ), contact AS (
+      UPDATE contacts SET status = 'sent', updated_at = now() WHERE id = $1
+    ), campaign AS (
+      UPDATE postman_campaigns SET status = 'sending', updated_at = now() WHERE id = $7 AND status = 'approved'
+    ) SELECT id FROM person`, [p.contact_id, p.email, p.subject, messageId, threadId ?? null, p.id, campaignId]);
+  if (!logged) throw new Error("Dispatch was already resolved");
+  return { sent: true, person_id: p.id, send_id: logged.id, gmail_message_id: messageId };
+}
+
+async function sendPostmanEmail(c: { id: number; resume_variant: Variant }, p: {
+  id: number; contact_id: number; email: string; subject: string; body: string; html: string; sha256: string;
+}) {
+  if (sha(`${p.email}\n${p.subject}\n${p.html}`) !== p.sha256) return ok({ refused: true, reason: "Approved email changed" });
+  const [{ sender, token }, resume, thumbnail] = await Promise.all([
+    postmanMailbox(), renderResume(c.resume_variant), fetch(THUMBNAIL_URL, { signal: AbortSignal.timeout(10000) }),
+  ]);
+  if (!thumbnail.ok) throw new Error(`Portfolio thumbnail failed (HTTP ${thumbnail.status})`);
+  const mimeType = thumbnail.headers.get("content-type")?.split(";")[0] ?? "";
+  if (!/^image\/(png|jpeg|gif|webp)$/.test(mimeType)) throw new Error("Portfolio thumbnail did not return an image");
+  const raw = buildMime({ messageId: postmanMessageId(p.id, p.sha256), from: `Vishwa Mehta <${sender}>`, to: p.email, subject: p.subject, text: p.body, html: p.html,
+    attachments: [
+      { filename: THUMBNAIL_FILE.replace(/\.png$/, `.${mimeType.split("/")[1]}`), mimeType, data: Buffer.from(await thumbnail.arrayBuffer()), contentId: "att0" },
+      { filename: resume.filename, mimeType: "application/pdf", data: resume.pdf },
+    ],
+  });
+  const g = await guardrailStatus(p.contact_id);
+  if (!g.can_send) return ok({ refused: true, reason: g.blocks.join(" ") });
+  const claim = await one(`UPDATE postman_people p SET status = 'dispatching', updated_at = now()
+    FROM postman_campaigns c
+    WHERE p.id = $1 AND c.id = p.campaign_id AND c.status IN ('approved','sending')
+      AND p.status = 'approved' AND p.sha256 = $2
+      AND NOT EXISTS (SELECT 1 FROM sends s WHERE s.contact_id = p.contact_id OR lower(s.to_email) = lower(p.email))
+    RETURNING p.id`, [p.id, p.sha256]).catch((error) => {
+    if (error?.code === "23505") return null;
+    throw error;
+  });
+  if (!claim) return ok({ wait: true, reason: "A send is in progress or this recipient has already been contacted" });
+  try {
+    const result = await gmail(token, "messages/send", { method: "POST", body: JSON.stringify({ raw }) });
+    if (result.status >= 400 && result.status < 500 && result.status !== 408) {
+      await q("UPDATE postman_people SET status = 'approved', updated_at = now() WHERE id = $1 AND status = 'dispatching'", [p.id]);
+      return ok({ refused: true, reason: `Gmail rejected the send (HTTP ${result.status})` });
+    }
+    if (result.status !== 200 || !result.json?.id) throw new Error("Gmail did not confirm acceptance");
+    return ok(await logPostmanDispatch(c.id, p, result.json.id, result.json.threadId));
+  } catch {
+    return ok({ stop: true, person_id: p.id, reason: "Gmail acceptance or logging was uncertain. Check Sent mail before resolving the pending dispatch. Postman will not retry it automatically." });
+  }
+}
 
 export function registerPostmanTools(server: McpServer) {
   server.registerTool(
@@ -452,7 +560,7 @@ export function registerPostmanTools(server: McpServer) {
       }
       const n = await q("UPDATE postman_people SET status = 'approved', updated_at = now() WHERE campaign_id = $1 AND status = 'picked' RETURNING id", [campaign_id]);
       await q("UPDATE postman_campaigns SET status = 'approved', approved_quote = $2, approved_at = now(), stop_reason = NULL, updated_at = now() WHERE id = $1", [campaign_id, vishwa_said]);
-      return ok({ approved: n.length, next: "jamie_postman_assets once per session (thumbnail + resume files), then loop jamie_postman_next -> Gmail send_message -> jamie_postman_sent." });
+      return ok({ approved: n.length, next: "Call jamie_postman_gmail_check, then call jamie_postman_next with send_via_gmail: true for each approved message." });
     }
   );
 
@@ -482,16 +590,51 @@ export function registerPostmanTools(server: McpServer) {
     }
   );
 
+  server.registerTool("jamie_postman_gmail_check", {
+    description: "Verify Postman's production Gmail connection and sender with a read-only Gmail profile request.",
+    inputSchema: {},
+  }, async () => {
+    try {
+      const { sender } = await postmanMailbox();
+      return ok({ connected: true, sender });
+    } catch (error) {
+      return ok({ connected: false, reason: error instanceof Error ? error.message : "Gmail connection failed" });
+    }
+  });
+
+  server.registerTool("jamie_postman_reconcile", {
+    description: "Check Sent mail for an interrupted dispatch and log a matching Gmail message. Never sends or retries.",
+    inputSchema: { person_id: z.number().int() },
+  }, async ({ person_id }) => {
+    const p = await one("SELECT * FROM postman_people WHERE id = $1 AND status = 'dispatching'", [person_id]);
+    if (!p) return ok({ refused: true, reason: "No pending dispatch for this person" });
+    const { token } = await postmanMailbox();
+    const query = encodeURIComponent(`in:sent rfc822msgid:${postmanMessageId(p.id, p.sha256)}`);
+    const result = await gmail(token, `messages?maxResults=2&q=${query}`);
+    if (result.status !== 200 || !result.json) throw new Error(`Gmail Sent lookup failed (HTTP ${result.status})`);
+    const messages = result.json.messages ?? [];
+    if (messages.length !== 1) return ok({ pending: true, matches: messages.length, reason: "Gmail has not returned a unique match. Leave this dispatch on hold." });
+    return ok(await logPostmanDispatch(p.campaign_id, p, messages[0].id, messages[0].threadId));
+  });
+
+  server.registerTool("jamie_postman_check_bounces", {
+    description: "Check Gmail delivery failures for a campaign's sent mail at the existing 1h and 24h checkpoints.",
+    inputSchema: { campaign_id: z.number().int() },
+  }, async ({ campaign_id }) => ok({ checked: await checkPostmanBounces(campaign_id) }));
+
   server.registerTool(
     "jamie_postman_next",
     {
-      description: "Postman: the next email allowed to go out now, with its exact payload (to, subject, htmlBody, body, attachment order). Code enforces approval, the canary wave, bounce stops, the daily Gmail ceiling, Jamie's guardrails and pacing. Send it exactly as returned, then jamie_postman_sent.",
-      inputSchema: { campaign_id: z.number().int() },
+      description: "Postman: the next email allowed to go out now, with its exact payload (to, subject, htmlBody, body, attachment order). Code enforces approval, the canary wave, bounce stops, the daily Gmail ceiling, Jamie's guardrails and pacing. Use send_via_gmail to send and log it in code. The default returns the legacy Gmail payload.",
+      inputSchema: { campaign_id: z.number().int(), send_via_gmail: z.boolean().optional() },
     },
-    async ({ campaign_id }) => {
+    async ({ campaign_id, send_via_gmail }) => {
       const c = await one("SELECT * FROM postman_campaigns WHERE id = $1", [campaign_id]);
       if (!c) return ok({ refused: true, reason: "no such campaign" });
       if (!["approved", "sending"].includes(c.status)) return ok({ stop: true, reason: `campaign is ${c.status}${c.stop_reason ? `: ${c.stop_reason}` : ""}` });
+      const pending = await one("SELECT id FROM postman_people WHERE status = 'dispatching' LIMIT 1");
+      if (pending) return ok({ wait: true, person_id: pending.id, reason: "A Gmail dispatch is pending; use jamie_postman_reconcile if the dispatch was interrupted." });
+      if (send_via_gmail) await checkPostmanBounces(campaign_id);
       await syncBounces(campaign_id);
       const stop = async (why: string, status = "needs_vishwa") => {
         await q("UPDATE postman_campaigns SET status = $2, stop_reason = $3, updated_at = now() WHERE id = $1", [campaign_id, status, why]);
@@ -541,7 +684,7 @@ export function registerPostmanTools(server: McpServer) {
         if (ago < gap) return ok({ wait: true, wait_seconds: Math.ceil(gap - ago), reason: "pacing between sends" });
       }
 
-      const wave1Clear = wave1.every((p) => p.status === "sent" && p.checked_1h && !p.bounced);
+      const wave1Clear = wave1.filter((p) => !['skipped', 'dropped'].includes(p.status)).every((p) => p.status === "sent" && p.checked_1h && !p.bounced);
       const candidates = (await q(
         `SELECT * FROM postman_people WHERE campaign_id = $1 AND status = 'approved' AND ($2::boolean OR wave = 1) ORDER BY wave, score DESC, id`,
         [campaign_id, wave1Clear || !wave1.length]
@@ -551,6 +694,14 @@ export function registerPostmanTools(server: McpServer) {
         if (!g.can_send) {
           await q("UPDATE postman_people SET status = 'skipped', reason = concat_ws('; ', reason, $2::text) WHERE id = $1", [p.id, g.blocks.join(" ")]);
           continue;
+        }
+        if (send_via_gmail) {
+          const prior = await one("SELECT id FROM sends WHERE contact_id = $1 OR lower(to_email) = lower($2) LIMIT 1", [p.contact_id, p.email]);
+          if (prior) {
+            await q("UPDATE postman_people SET status = 'skipped', reason = 'Already contacted' WHERE id = $1 AND status = 'approved'", [p.id]);
+            continue;
+          }
+          return sendPostmanEmail(c, p);
         }
         const resumeFile = RESUME_FILES[c.resume_variant as Variant];
         const thumbSha = (await getSetting<string>(`postman_asset:${THUMBNAIL_FILE}`)) ?? "<thumbnail sha256 from jamie_postman_assets>";
