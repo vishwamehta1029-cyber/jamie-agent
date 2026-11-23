@@ -38,6 +38,7 @@ Jamie is my personal agent. Think of him as a second brain that does the work fo
 | [`src/http.ts`](src/http.ts) | Secure endpoint for Claude and ChatGPT |
 | [`src/db.ts`](src/db.ts) | Postgres connection and settings |
 | [`skill/SKILL.md`](skill/SKILL.md) | Jamie's rules and workflows for Claude |
+| [`dashboard/`](dashboard/) | Separate, password-protected, read-only web dashboard (Next.js): Entrepreneur, applications, lessons and a database browser. Its own Vercel project; see [`dashboard/README.md`](dashboard/README.md) |
 
 A taste: before any email goes out, the server itself checks the limits, so the model can't skip them.
 
@@ -1695,6 +1696,7 @@ src/entrepreneur*.ts Entrepreneur: YC discovery, founders, email lookup, sending
 src/seed.ts         One-time seed loader
 src/seedData.ts     Demo seed data (fictional)
 skill/SKILL.md      The Claude skill: Jamie's rules and workflows
+dashboard/          Read-only web dashboard, a separate Next.js app and Vercel project
 docs/               Demo video and images
 ```
 
@@ -1711,6 +1713,8 @@ docs/               Demo video and images
 Tables are created automatically on first request.
 
 Entrepreneur is optional and off by default. To use it, add the variables in the Entrepreneur block of `.env.example` (`CRON_SECRET`, `APOLLO_API_KEY`, `ANTHROPIC_API_KEY`, `GMAIL_*`), then set `entrepreneur_enabled` to true with `jamie_update_settings`. See [`agents/entrepreneur.md`](agents/entrepreneur.md).
+
+To see everything in a browser, deploy the dashboard as a second Vercel project with Root Directory `dashboard` and the same database. It is read only and behind a password. Steps: [`dashboard/README.md`](dashboard/README.md).
 
 ## Privacy
 
