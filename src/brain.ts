@@ -1,5 +1,6 @@
 import { q } from "./db.js";
 import { DONE_CHECKLIST } from "./projectLab.js";
+import { entrepreneurBrain } from "./entrepreneur.js";
 
 const esc = (v: unknown) =>
   v === null || v === undefined || v === "" ? "" : String(v).replace(/\|/g, "\\|").replace(/\n/g, " ");
@@ -191,6 +192,17 @@ export async function renderBrain(): Promise<string> {
   out.push(`## Postman\n`);
   out.push(`Outreach for jobs Vishwa selects: up to 25 relevant US people per company, every email written in code from her approved template, sent only after she approves the batch. Unconfirmed patterns send a 3 person canary first.\n`);
   if (pmCamps.length) out.push(table(["#", "Company", "Role", "Status", "Sent", "Bounced", "Unsent", "Updated"], pmCamps, (r) => [r.id, r.company, r.role, r.status, r.sent, r.bounced, r.unsent, day(r.updated_at)]));
+
+  const ent = await entrepreneurBrain();
+  out.push(`## Entrepreneur\n`);
+  out.push(`Daily cron: emails founders of active US YC companies building AI agents (newest batches first) for a coffee chat, from her approved template #159. Code end to end; the only LLM call writes the why line. ${ent.status.enabled ? "Enabled" : "Off (entrepreneur_enabled is false)"}${ent.status.dry_run ? ", dry run" : ""}. Today: ${ent.status.today.emails_sent} of ${ent.status.today.target} sent.\n`);
+  if (ent.founders.length) out.push(table(["Founder", "Title", "Company", "Batch", "Email source", "Status", "Why line", "Contacted"], ent.founders, (r) => [
+    r.name, r.title, r.company, r.batch, r.email_source, r.status_reason && r.email_status !== "sent" ? `${r.email_status} (${r.status_reason})` : r.email_status, r.why_line, day(r.contacted_at),
+  ]));
+  if (ent.companies.length) {
+    out.push(`### Entrepreneur companies (newest batch first)\n`);
+    out.push(table(["Company", "Batch", "What they do", "Location", "Team", "YC"], ent.companies, (r) => [r.name, r.batch, r.one_liner, r.location, r.team_size, r.yc_url]));
+  }
 
   out.push(`## Guardrail Settings\n`);
   out.push(table(["Setting", "Value"], settings, (r) => [r.key, JSON.stringify(r.value)]));

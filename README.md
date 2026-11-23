@@ -29,6 +29,10 @@ Jamie is my personal agent. Think of him as a second brain that does the work fo
 | [`agents/administrator.md`](agents/administrator.md) | Administrator agent spec |
 | [`src/postman.ts`](src/postman.ts) | Postman: 10 tools that send outreach for selected jobs to 25 relevant people per company (ranking, emails, canary wave and bounce stops in code) |
 | [`agents/postman.md`](agents/postman.md) | Postman agent spec |
+| [`src/entrepreneur.ts`](src/entrepreneur.ts) | Entrepreneur: a daily cron that emails founders of US YC agent startups for a coffee chat, code end to end (2 status tools) |
+| [`src/entrepreneurRules.ts`](src/entrepreneurRules.ts) | Entrepreneur's rules as plain code: YC filters, founder parsing, why line checks, template filling, Gmail MIME |
+| [`api/entrepreneur.ts`](api/entrepreneur.ts) | The cron endpoint, protected by `CRON_SECRET` |
+| [`agents/entrepreneur.md`](agents/entrepreneur.md) | Entrepreneur agent spec |
 | [`src/brain.ts`](src/brain.ts) | Turns the database into one readable "brain" file |
 | [`src/schema.ts`](src/schema.ts) | The brain's tables and default limits |
 | [`src/http.ts`](src/http.ts) | Secure endpoint for Claude and ChatGPT |
@@ -1631,7 +1635,7 @@ Jamie is a remote **MCP server** with one shared brain in Postgres. Claude and C
 Enforced in the skill **and** in the server, not left to judgment.
 
 - Nothing is submitted without my yes
-- Every email is approved before it sends
+- Every email is approved before it sends (Entrepreneur sends from her approved template, in code)
 - Every custom answer is approved, then logged for review
 - No passwords, sign-ins, or CAPTCHAs
 - Never re-applies to the same role
@@ -1664,7 +1668,7 @@ flowchart LR
 - **Facts are versioned.** Corrections retire the old fact and link to the new one, so nothing is silently overwritten.
 - **Guardrails live in the database.** `jamie_can_send` and `jamie_log_application` refuse actions past the caps, even if the model forgets.
 
-## Tools (26)
+## Tools (28)
 
 | Area | Tools |
 |---|---|
@@ -1675,16 +1679,19 @@ flowchart LR
 | Contacts and email | `jamie_upsert_contact`, `jamie_check_domain`, `jamie_guess_email`, `jamie_save_email_pattern` |
 | Sending and bounces | `jamie_can_send`, `jamie_log_send`, `jamie_mark_bounce_checked`, `jamie_record_bounce`, `jamie_log_apollo` |
 | Settings and reporting | `jamie_update_settings`, `jamie_weekly_summary` |
+| Entrepreneur (daily cron) | `jamie_entrepreneur_status`, `jamie_entrepreneur_run` |
 
 ## Project structure
 
 ```
 api/mcp.ts          Vercel function entry point
+api/entrepreneur.ts Entrepreneur's daily cron (vercel.json crons)
 src/http.ts         Secret check, routes /mcp, /brain, /seed
 src/server.ts       All MCP tools and guardrail logic
 src/db.ts           Postgres pool, auto-migration, settings helpers
 src/schema.ts       Tables and default guardrail settings
 src/brain.ts        Renders the brain as Markdown
+src/entrepreneur*.ts Entrepreneur: YC discovery, founders, email lookup, sending, bounce checks
 src/seed.ts         One-time seed loader
 src/seedData.ts     Demo seed data (fictional)
 skill/SKILL.md      The Claude skill: Jamie's rules and workflows
@@ -1702,6 +1709,8 @@ docs/               Demo video and images
 5. Add `skill/SKILL.md` as a Claude skill.
 
 Tables are created automatically on first request.
+
+Entrepreneur is optional and off by default. To use it, add the variables in the Entrepreneur block of `.env.example` (`CRON_SECRET`, `APOLLO_API_KEY`, `ANTHROPIC_API_KEY`, `GMAIL_*`), then set `entrepreneur_enabled` to true with `jamie_update_settings`. See [`agents/entrepreneur.md`](agents/entrepreneur.md).
 
 ## Privacy
 

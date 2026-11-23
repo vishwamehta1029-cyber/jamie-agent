@@ -155,6 +155,14 @@ Postman emails up to 25 relevant US people at each company for the jobs Vishwa s
 7. Loop `jamie_postman_next` → Gmail `send_message` with the payload exactly as returned → `jamie_postman_sent`. On `wait`, move to the next company and come back. On `stop`, tell her right away.
 8. Bounce checks at 1 hour and 24 hours as in Workflow 3.
 
+## Workflow 8: Entrepreneur (daily cron, no chat steps)
+
+Entrepreneur emails founders of US YC agent startups for a coffee chat, about 100 a day, entirely in code on a Vercel cron. The only LLM call is the why line, made by the server. **You never search, draft or send for Entrepreneur.** Full spec: `agents/entrepreneur.md`.
+
+- When she asks how it is going: `jamie_entrepreneur_status` (today's counts, last run, last error).
+- To preview: `jamie_entrepreneur_run` (dry run by default) and show her the sample emails.
+- Turning it on or off (`entrepreneur_enabled`) or dry run (`entrepreneur_dry_run`): `jamie_update_settings`, only when she says so.
+
 ## Working with ChatGPT
 
 ChatGPT shares the same connector. Vishwa may draft emails or answers there. ChatGPT cannot run git, so Project Lab there is limited to progress, ideas and reviews; building happens in Claude. When picking up, trust the handoff and the answer bank, not chat history. Drafts approved in ChatGPT still go through `jamie_can_send` before sending from here.

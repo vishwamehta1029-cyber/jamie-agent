@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { promises as dns } from "node:dns";
 import { z } from "zod";
 import { q, one, getSetting, setSetting } from "./db.js";
-import { guardrailStatus, applyPattern } from "./server.js";
+import { guardrailStatus, applyPattern, bounceStreakStop } from "./server.js";
 import { renderResume } from "./administrator.js";
 import { pickVariant, RESUME_FILES, type Variant } from "./adminRules.js";
 
@@ -499,8 +499,8 @@ export function registerPostmanTools(server: McpServer) {
       };
 
       // 3 bounces in a row anywhere: stop all outreach (Vishwa, Nov 4 2026).
-      const last3 = (await q("SELECT bounced FROM sends ORDER BY sent_at DESC LIMIT 3")) as any[];
-      if (last3.length === 3 && last3.every((s) => s.bounced)) return stop("The last 3 emails sent all bounced. Outreach stopped until Vishwa looks.");
+      const streak = await bounceStreakStop();
+      if (streak) return stop(streak);
 
       // Canary bounced: the guessed pattern is probably wrong. Re-guess the rest and send back for approval.
       const wave1 = (await q("SELECT pp.*, s.checked_1h, s.bounced FROM postman_people pp LEFT JOIN sends s ON s.id = pp.send_id WHERE pp.campaign_id = $1 AND pp.wave = 1 AND pp.email_source = 'guessed'", [campaign_id])) as any[];

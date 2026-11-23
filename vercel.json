@@ -21,5 +21,103 @@
       "source": "/:secret/seed",
       "destination": "/api/mcp?k=:secret&view=seed"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "7 16 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "37 16 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "7 17 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "37 17 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "7 18 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "37 18 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "7 19 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "37 19 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "7 20 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "37 20 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "7 21 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "37 21 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "7 22 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "37 22 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "7 23 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "37 23 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "7 0 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "37 0 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "7 1 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "37 1 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "7 2 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "37 2 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "7 3 * * *"
+    },
+    {
+      "path": "/api/entrepreneur",
+      "schedule": "37 3 * * *"
+    }
   ]
 }

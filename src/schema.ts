@@ -382,4 +382,69 @@ INSERT INTO settings (key, value) VALUES ('postman_recruiter_share', '0.4') ON C
 INSERT INTO settings (key, value) VALUES ('postman_canary_size', '3') ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('postman_min_gap_seconds', '20') ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('postman_gmail_daily_ceiling', '450') ON CONFLICT (key) DO NOTHING;
+-- Entrepreneur: daily cron emails founders of US YC agent startups (Nov 23, 2026). Code end to end; the only LLM call writes the why line.
+CREATE TABLE IF NOT EXISTS ent_companies (
+  id SERIAL PRIMARY KEY,
+  yc_slug TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  batch TEXT,
+  batch_key INT,
+  one_liner TEXT,
+  description TEXT,
+  website TEXT,
+  domain TEXT,
+  location TEXT,
+  team_size INT,
+  status TEXT,
+  tags TEXT[] NOT NULL DEFAULT '{}',
+  yc_url TEXT NOT NULL,
+  agent_terms TEXT[] NOT NULL DEFAULT '{}',
+  search_term TEXT,
+  founders_fetched_at TIMESTAMPTZ,
+  founders_error TEXT,
+  discovered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ent_companies_batch_idx ON ent_companies (batch_key DESC NULLS LAST, id);
+CREATE TABLE IF NOT EXISTS ent_founders (
+  id SERIAL PRIMARY KEY,
+  company_id INT NOT NULL REFERENCES ent_companies(id),
+  name TEXT NOT NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT,
+  title TEXT,
+  linkedin_url TEXT,
+  twitter_url TEXT,
+  email TEXT,
+  email_source TEXT CHECK (email_source IN ('public', 'apollo')),
+  email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  email_lookup_at TIMESTAMPTZ,
+  why_line TEXT,
+  why_source TEXT,
+  email_status TEXT NOT NULL DEFAULT 'new' CHECK (email_status IN ('new', 'sending', 'no_verified_email', 'blocked', 'sent', 'bounced', 'replied')),
+  status_reason TEXT,
+  contact_id INT REFERENCES contacts(id),
+  send_id INT REFERENCES sends(id),
+  contacted_at TIMESTAMPTZ,
+  gmail_message_id TEXT,
+  gmail_thread_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ent_founders_name_idx ON ent_founders (company_id, lower(name));
+CREATE UNIQUE INDEX IF NOT EXISTS ent_founders_email_idx ON ent_founders (lower(email)) WHERE email IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ent_founders_linkedin_idx ON ent_founders (lower(linkedin_url)) WHERE linkedin_url IS NOT NULL;
+CREATE INDEX IF NOT EXISTS ent_founders_status_idx ON ent_founders (email_status, updated_at);
+CREATE TABLE IF NOT EXISTS ent_runs (
+  id SERIAL PRIMARY KEY,
+  trigger TEXT NOT NULL,
+  dry_run BOOLEAN NOT NULL DEFAULT FALSE,
+  stats JSONB NOT NULL DEFAULT '{}'::jsonb,
+  error TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ
+);
+INSERT INTO settings (key, value) VALUES ('entrepreneur_enabled', 'false') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('entrepreneur_dry_run', 'false') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('entrepreneur_lock', '{"until": "1970-01-01T00:00:00Z"}') ON CONFLICT (key) DO NOTHING;
 `;
