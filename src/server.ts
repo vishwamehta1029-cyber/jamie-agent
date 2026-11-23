@@ -7,6 +7,7 @@ import { registerScoutTools, shortlistCount } from "./scout.js";
 import { registerStylistTools, stylistPendingCount } from "./stylist.js";
 import { registerAdministratorTools, adminStatus } from "./administrator.js";
 import { registerPostmanTools, postmanStatus } from "./postman.js";
+import { registerEntrepreneurTools, entrepreneurStatus } from "./entrepreneur.js";
 
 const ok = (data: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
@@ -96,6 +97,110 @@ export async function guardrailStatus(contactId?: number) {
   };
 }
 
+// ---------- Shared send guardrail logic (used by the jamie_* tools below and by Entrepreneur's cron) ----------
+
+/** jamie_check_domain: MX lookup, saved to email_patterns. */
+export async function checkDomain(domain: string, catch_all?: boolean) {
+  const d = norm(domain);
+  let mx: { exchange: string; priority: number }[] = [];
+  let accepts = false;
+  try {
+    mx = await dns.resolveMx(d);
+    accepts = mx.length > 0;
+  } catch {
+    accepts = false;
+  }
+  const row = await one(
+    `INSERT INTO email_patterns (domain, accepts_mail, catch_all) VALUES ($1,$2,$3)
+     ON CONFLICT (domain) DO UPDATE SET accepts_mail = EXCLUDED.accepts_mail,
+       catch_all = COALESCE(EXCLUDED.catch_all, email_patterns.catch_all), updated_at = now()
+     RETURNING *`,
+    [d, accepts, catch_all ?? null]
+  );
+  return { ...row, mx: mx.map((m) => m.exchange) };
+}
+
+/** jamie_log_send: record a sent email and mark the contact sent. */
+export async function logSend(a: { contact_id: number; to_email: string; subject?: string | null; gmail_message_id?: string | null; gmail_thread_id?: string | null }) {
+  const row = await one(
+    `INSERT INTO sends (contact_id, to_email, subject, gmail_message_id, gmail_thread_id) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [a.contact_id, a.to_email, a.subject ?? null, a.gmail_message_id ?? null, a.gmail_thread_id ?? null]
+  );
+  await q("UPDATE contacts SET status = 'sent', updated_at = now() WHERE id = $1", [a.contact_id]);
+  return row;
+}
+
+/** jamie_mark_bounce_checked: no bounce found at the 1h or 24h checkpoint. */
+export async function markBounceChecked(send_id: number, checkpoint: "1h" | "24h") {
+  const col = checkpoint === "1h" ? "checked_1h" : "checked_24h";
+  const row = await one(`UPDATE sends SET ${col} = TRUE WHERE id = $1 RETURNING *`, [send_id]);
+  if (checkpoint === "24h" && row) {
+    const c = await one("SELECT * FROM contacts WHERE id = $1", [row.contact_id]);
+    if (c?.email_source === "guessed" && c.domain) {
+      await q(
+        `UPDATE email_patterns SET status = 'confirmed', evidence = COALESCE(evidence,'') || ' | no bounce 24h: ' || $2, updated_at = now()
+         WHERE domain = $1 AND status = 'guessed' AND pattern IS NOT NULL`,
+        [c.domain, row.to_email]
+      );
+    }
+  }
+  return row;
+}
+
+/** jamie_record_bounce: mark the send bounced, update the company bounce count, return the allowed next action. */
+export async function recordBounce(send_id: number, bounce_reason?: string) {
+  const s = await one("UPDATE sends SET bounced = TRUE, bounced_at = now() WHERE id = $1 RETURNING *", [send_id]);
+  if (!s) throw new Error(`send ${send_id} not found`);
+  const c = await one(
+    "UPDATE contacts SET status = 'bounced', notes = COALESCE(notes,'') || $2, updated_at = now() WHERE id = $1 RETURNING *",
+    [s.contact_id, bounce_reason ? ` | bounce: ${bounce_reason}` : ""]
+  );
+  const companyCap = await getSetting<number>("company_bounce_cap");
+  let company_cap_hit = false;
+  if (c.domain) {
+    const p = await one(
+      "UPDATE email_patterns SET bounces = bounces + 1, updated_at = now() WHERE domain = $1 RETURNING *",
+      [c.domain]
+    );
+    if (p && p.bounces >= companyCap) {
+      await q("UPDATE email_patterns SET status = 'wrong' WHERE domain = $1 AND status <> 'confirmed'", [c.domain]);
+      company_cap_hit = true;
+    }
+  }
+  const apolloUsed = await one("SELECT id FROM apollo_usage WHERE contact_id = $1 LIMIT 1", [c.id]);
+  const nextAction =
+    c.email_source === "apollo" || apolloUsed
+      ? { action: "dead_end", why: "Apollo already used for this contact. Mark dead_end." }
+      : { action: "apollo_lookup", why: "One Apollo lookup allowed for this person only. Log it with jamie_log_apollo." };
+  return {
+    contact: c,
+    bounce_rate: await bounceRate(),
+    tell_vishwa: company_cap_hit
+      ? `${c.company} reached ${companyCap} bounces. Stop guessing there and ask her.`
+      : undefined,
+    next: nextAction,
+  };
+}
+
+/** jamie_log_apollo: log an Apollo lookup; a verified email is saved to the contact, otherwise the contact is a dead end. */
+export async function logApollo(a: { contact_id: number; reason: string; credits?: number; verified_email?: string; result?: string }) {
+  await q("INSERT INTO apollo_usage (contact_id, reason, credits, result) VALUES ($1,$2,$3,$4)", [
+    a.contact_id, a.reason, a.credits ?? 1, a.result ?? (a.verified_email ? `found ${a.verified_email}` : "no verified email"),
+  ]);
+  return a.verified_email
+    ? await one(
+        "UPDATE contacts SET email = $2, email_source = 'apollo', email_confidence = 'high', status = 'new', updated_at = now() WHERE id = $1 RETURNING *",
+        [a.contact_id, a.verified_email]
+      )
+    : await one("UPDATE contacts SET status = 'dead_end', updated_at = now() WHERE id = $1 RETURNING *", [a.contact_id]);
+}
+
+/** Vishwa's rule (Nov 4, 2026): if the last 3 emails sent anywhere all bounced, all outreach stops. */
+export async function bounceStreakStop(): Promise<string | null> {
+  const last3 = (await q("SELECT bounced FROM sends ORDER BY sent_at DESC LIMIT 3")) as any[];
+  return last3.length === 3 && last3.every((s) => s.bounced) ? "The last 3 emails sent all bounced. Outreach stopped until Vishwa looks." : null;
+}
+
 const COMMON_PATTERNS = ["{first}.{last}", "{first}", "{f}{last}", "{first}{last}", "{first}_{last}", "{f}.{last}", "{first}{l}"];
 
 export function applyPattern(pattern: string, first: string, last: string, domain: string) {
@@ -150,6 +255,7 @@ export function buildServer() {
         stylist: { changes_waiting_for_vishwa: await stylistPendingCount() },
         administrator: await adminStatus(),
         postman: await postmanStatus(),
+        entrepreneur: await entrepreneurStatus(),
         guardrails: await guardrailStatus(),
         pending_applications: awaiting,
         sends_needing_bounce_check: needCheck,
@@ -493,25 +599,7 @@ export function buildServer() {
         "Free pre-send check: does this domain accept mail (MX records)? Saves the result. Mark catch_all if you have evidence (it cannot be detected here).",
       inputSchema: { domain: z.string(), catch_all: z.boolean().optional() },
     },
-    async ({ domain, catch_all }) => {
-      const d = norm(domain);
-      let mx: { exchange: string; priority: number }[] = [];
-      let accepts = false;
-      try {
-        mx = await dns.resolveMx(d);
-        accepts = mx.length > 0;
-      } catch {
-        accepts = false;
-      }
-      const row = await one(
-        `INSERT INTO email_patterns (domain, accepts_mail, catch_all) VALUES ($1,$2,$3)
-         ON CONFLICT (domain) DO UPDATE SET accepts_mail = EXCLUDED.accepts_mail,
-           catch_all = COALESCE(EXCLUDED.catch_all, email_patterns.catch_all), updated_at = now()
-         RETURNING *`,
-        [d, accepts, catch_all ?? null]
-      );
-      return ok({ ...row, mx: mx.map((m) => m.exchange) });
-    }
+    async ({ domain, catch_all }) => ok(await checkDomain(domain, catch_all))
   );
 
   server.registerTool(
@@ -593,11 +681,7 @@ export function buildServer() {
       },
     },
     async ({ contact_id, to_email, subject, gmail_message_id, gmail_thread_id }) => {
-      const row = await one(
-        `INSERT INTO sends (contact_id, to_email, subject, gmail_message_id, gmail_thread_id) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-        [contact_id, to_email, subject ?? null, gmail_message_id ?? null, gmail_thread_id ?? null]
-      );
-      await q("UPDATE contacts SET status = 'sent', updated_at = now() WHERE id = $1", [contact_id]);
+      const row = await logSend({ contact_id, to_email, subject, gmail_message_id, gmail_thread_id });
       return ok({ send: row, next: "Check Gmail for a bounce at 1 hour and 24 hours, then call jamie_mark_bounce_checked or jamie_record_bounce." });
     }
   );
@@ -608,21 +692,7 @@ export function buildServer() {
       description: "Mark a send as checked with no bounce found, at the 1h or 24h checkpoint.",
       inputSchema: { send_id: z.number().int(), checkpoint: z.enum(["1h", "24h"]) },
     },
-    async ({ send_id, checkpoint }) => {
-      const col = checkpoint === "1h" ? "checked_1h" : "checked_24h";
-      const row = await one(`UPDATE sends SET ${col} = TRUE WHERE id = $1 RETURNING *`, [send_id]);
-      if (checkpoint === "24h" && row) {
-        const c = await one("SELECT * FROM contacts WHERE id = $1", [row.contact_id]);
-        if (c?.email_source === "guessed" && c.domain) {
-          await q(
-            `UPDATE email_patterns SET status = 'confirmed', evidence = COALESCE(evidence,'') || ' | no bounce 24h: ' || $2, updated_at = now()
-             WHERE domain = $1 AND status = 'guessed' AND pattern IS NOT NULL`,
-            [c.domain, row.to_email]
-          );
-        }
-      }
-      return ok(row);
-    }
+    async ({ send_id, checkpoint }) => ok(await markBounceChecked(send_id, checkpoint))
   );
 
   server.registerTool(
@@ -632,39 +702,7 @@ export function buildServer() {
         "Record that a send bounced. Updates the company bounce count and marks the pattern wrong at the company cap. Returns the allowed next action: one Apollo lookup for this person, or dead_end.",
       inputSchema: { send_id: z.number().int(), bounce_reason: z.string().optional() },
     },
-    async ({ send_id, bounce_reason }) => {
-      const s = await one("UPDATE sends SET bounced = TRUE, bounced_at = now() WHERE id = $1 RETURNING *", [send_id]);
-      if (!s) throw new Error(`send ${send_id} not found`);
-      const c = await one(
-        "UPDATE contacts SET status = 'bounced', notes = COALESCE(notes,'') || $2, updated_at = now() WHERE id = $1 RETURNING *",
-        [s.contact_id, bounce_reason ? ` | bounce: ${bounce_reason}` : ""]
-      );
-      const companyCap = await getSetting<number>("company_bounce_cap");
-      let company_cap_hit = false;
-      if (c.domain) {
-        const p = await one(
-          "UPDATE email_patterns SET bounces = bounces + 1, updated_at = now() WHERE domain = $1 RETURNING *",
-          [c.domain]
-        );
-        if (p && p.bounces >= companyCap) {
-          await q("UPDATE email_patterns SET status = 'wrong' WHERE domain = $1 AND status <> 'confirmed'", [c.domain]);
-          company_cap_hit = true;
-        }
-      }
-      const apolloUsed = await one("SELECT id FROM apollo_usage WHERE contact_id = $1 LIMIT 1", [c.id]);
-      const nextAction =
-        c.email_source === "apollo" || apolloUsed
-          ? { action: "dead_end", why: "Apollo already used for this contact. Mark dead_end." }
-          : { action: "apollo_lookup", why: "One Apollo lookup allowed for this person only. Log it with jamie_log_apollo." };
-      return ok({
-        contact: c,
-        bounce_rate: await bounceRate(),
-        tell_vishwa: company_cap_hit
-          ? `${c.company} reached ${companyCap} bounces. Stop guessing there and ask her.`
-          : undefined,
-        next: nextAction,
-      });
-    }
+    async ({ send_id, bounce_reason }) => ok(await recordBounce(send_id, bounce_reason))
   );
 
   server.registerTool(
@@ -681,15 +719,7 @@ export function buildServer() {
       },
     },
     async ({ contact_id, reason, credits, verified_email, result }) => {
-      await q("INSERT INTO apollo_usage (contact_id, reason, credits, result) VALUES ($1,$2,$3,$4)", [
-        contact_id, reason, credits ?? 1, result ?? (verified_email ? `found ${verified_email}` : "no verified email"),
-      ]);
-      const c = verified_email
-        ? await one(
-            "UPDATE contacts SET email = $2, email_source = 'apollo', email_confidence = 'high', status = 'new', updated_at = now() WHERE id = $1 RETURNING *",
-            [contact_id, verified_email]
-          )
-        : await one("UPDATE contacts SET status = 'dead_end', updated_at = now() WHERE id = $1 RETURNING *", [contact_id]);
+      const c = await logApollo({ contact_id, reason, credits, verified_email, result });
       return ok({
         contact: c,
         next: verified_email
@@ -745,6 +775,8 @@ export function buildServer() {
         admin_autopilot: z.boolean().optional().describe("Administrator applies and submits without stopping for approval (Vishwa turned this on Nov 20, 2026)"),
         admin_run_cap: z.number().int().min(1).max(45).optional().describe("Most applications Administrator submits in one run"),
         admin_max_failure_streak: z.number().int().min(1).max(10).optional().describe("Failed applications in a row before autopilot pauses itself"),
+        entrepreneur_enabled: z.boolean().optional().describe("Entrepreneur kill switch. false (default) = the daily cron does nothing; true = it discovers, looks up and sends"),
+        entrepreneur_dry_run: z.boolean().optional().describe("Entrepreneur builds everything but sends nothing and spends no Apollo credits"),
       },
     },
     async (s) => {
@@ -783,6 +815,7 @@ export function buildServer() {
   registerStylistTools(server);
   registerAdministratorTools(server);
   registerPostmanTools(server);
+  registerEntrepreneurTools(server);
 
   return server;
 }
