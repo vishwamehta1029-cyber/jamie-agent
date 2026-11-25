@@ -74,3 +74,15 @@ A scheduled task runs the loop daily on Vishwa's computer (it needs her Chrome).
 ## 7. Review after the fact
 
 `jamie_admin_report` shows what was submitted, every answer Jamie wrote, and handoffs waiting. Written answers are saved to the answer bank as unapproved; once Vishwa reads them she can approve the good ones for reuse.
+
+## Cross-platform resume
+
+Claude and ChatGPT use the same Vercel MCP server and Postgres database. Deploy a version that exposes `jamie_admin_resume_status`, `jamie_admin_takeover`, and `jamie_admin_checkpoint`. Refresh Jamie’s tools in ChatGPT and enable the Administrator and Scout actions. Verify `jamie_admin_resume_status` in ChatGPT before running an application.
+
+- **Start in Claude.** Pass `platform: "claude"` to `jamie_admin_start_run`. Keep its run ID and worker token in the worker context. Pass the token to prepare, fill, done, and finish. Never put it in a handoff note. Start a fresh run only if no other worker is handling the intended batch.
+- **Save progress.** Checkpoint before opening an application, immediately before clicking Submit, and after recording its outcome. Update the saved stage, Scout run ID, and pending LinkedIn Saved IDs when they change. A worker that receives `stop` from the checkpoint must stop browser work.
+- **Resume in ChatGPT.** Call `jamie_start_session` with `platform: "chatgpt"`, then read `jamie_admin_resume_status`. Select the interrupted run and claim that same run with `jamie_admin_takeover`. A managed run becomes eligible after 30 minutes without a heartbeat. For a confirmed stop, pass `interruption_confirmed: true` while taking over from the other platform. This also supports older runs without a heartbeat.
+- **Reconcile first.** Use the receipt or confirmation page for each in-progress role returned by takeover. Record confirmed submissions, and hand off uncertain cases with the role and URL. Use the existing run ID and new token so the recorded submissions continue to count toward the same cap.
+- **Continue.** Process LinkedIn Saved pages 1 and 2 before Scout's shortlist. Use the checkpoint's Scout run ID when available. Continue through the normal prepare, upload, fill, check, confirmation and logging steps. Apply the platform's existing approval rules. Verify the ChatGPT browser can upload the current resume before starting live submissions.
+
+Heartbeat expiry makes a run eligible for takeover. A ChatGPT session still has to invoke takeover and drive the browser. The server cannot observe Claude's usage-limit screen or start a browser session by itself.
