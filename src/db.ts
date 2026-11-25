@@ -42,13 +42,31 @@ export async function one<T = any>(text: string, params: unknown[] = []): Promis
   return rows[0] ?? null;
 }
 
-export async function getSetting<T = any>(key: string): Promise<T> {
-  const row = await one<{ value: T }>("SELECT value FROM settings WHERE key = $1", [key]);
+export async function transaction<T>(work: (db: { q: typeof q; one: typeof one }) => Promise<T>): Promise<T> {
+  await ensureSchema();
+  const client = await getPool().connect();
+  const query: typeof q = async (text, params = []) => (await client.query(text, params)).rows;
+  const first: typeof one = async (text, params = []) => (await query(text, params))[0] ?? null;
+  try {
+    await client.query("BEGIN");
+    const result = await work({ q: query, one: first });
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getSetting<T = any>(key: string, find = one): Promise<T> {
+  const row = await find<{ value: T }>("SELECT value FROM settings WHERE key = $1", [key]);
   return row?.value as T;
 }
 
-export async function setSetting(key: string, value: unknown): Promise<void> {
-  await q(
+export async function setSetting(key: string, value: unknown, execute = q): Promise<void> {
+  await execute(
     "INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
     [key, JSON.stringify(value)]
   );

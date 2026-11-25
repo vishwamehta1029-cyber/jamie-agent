@@ -2,9 +2,9 @@
 // duplicates and caps, and checks every written answer. The LLM only drives the browser and writes the
 // few free-text answers code can't. Autopilot (Vishwa's choice, Nov 20 2026): no approval stops.
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { q, one, getSetting, setSetting } from "./db.js";
+import { q, one, getSetting, setSetting, transaction } from "./db.js";
 import { loadItems, seedStylist } from "./stylist.js";
 import { buildModel, renderPdf } from "./stylistResume.js";
 import { extractSalary } from "./scoutParse.js";
@@ -15,13 +15,13 @@ import {
 
 const ok = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] });
 
-async function activeFactIds(): Promise<Set<number>> {
-  return new Set((await q("SELECT id FROM facts WHERE active")).map((r: any) => r.id));
+async function activeFactIds(query = q): Promise<Set<number>> {
+  return new Set((await query("SELECT id FROM facts WHERE active")).map((r: any) => r.id));
 }
 
 /** Every number that appears in an active brain fact or an approved answer: the only numbers a written answer may use. */
-async function brainNumbers(): Promise<Set<string>> {
-  const rows = await q("SELECT fact AS t FROM facts WHERE active UNION ALL SELECT answer AS t FROM answers WHERE approved");
+async function brainNumbers(query = q): Promise<Set<string>> {
+  const rows = await query("SELECT fact AS t FROM facts WHERE active UNION ALL SELECT answer AS t FROM answers WHERE approved");
   const out = new Set<string>();
   for (const r of rows as any[]) for (const t of numberTokens(String(r.t))) { out.add(t.base); if (t.unit) out.add(t.base + t.unit); }
   return out;
@@ -35,14 +35,14 @@ const overlap = (a: string, b: string) => {
   return n / Math.min(A.size, B.size);
 };
 
-export async function findDuplicate(company: string, role: string, url?: string | null) {
-  const rows = await q("SELECT id, company, role, url, status, submitted_at FROM applications WHERE lower(company) = lower($1) AND status NOT IN ('skipped','failed','retry')", [company]);
+export async function findDuplicate(company: string, role: string, url?: string | null, query = q) {
+  const rows = await query("SELECT id, company, role, url, status, submitted_at FROM applications WHERE lower(company) = lower($1) AND status NOT IN ('skipped','failed','retry')", [company]);
   return (rows as any[]).find((r) => (url && r.url === url) || normRole(r.role) === normRole(role)) ?? null;
 }
 
-async function massToday(): Promise<{ used: number; cap: number }> {
-  const cap = Number((await getSetting("mass_apps_daily_cap")) ?? 45);
-  const r = await one("SELECT count(*) n FROM applications WHERE tier = 'mass' AND status = 'submitted' AND submitted_at >= date_trunc('day', now() AT TIME ZONE 'America/Los_Angeles') AT TIME ZONE 'America/Los_Angeles'");
+async function massToday(find = one): Promise<{ used: number; cap: number }> {
+  const cap = Number((await getSetting("mass_apps_daily_cap", find)) ?? 45);
+  const r = await find("SELECT count(*) n FROM applications WHERE tier = 'mass' AND status = 'submitted' AND submitted_at >= date_trunc('day', now() AT TIME ZONE 'America/Los_Angeles') AT TIME ZONE 'America/Los_Angeles'");
   return { used: Number(r?.n ?? 0), cap };
 }
 
@@ -55,19 +55,19 @@ export async function renderResume(variant: Variant) {
 }
 
 /** Fail-safe state. Paused means autopilot stopped itself; only Vishwa (or jamie_admin_unpause on her word) restarts it. */
-async function pausedReason(): Promise<string | null> {
-  const r = await getSetting<string | null>("admin_paused_reason");
+async function pausedReason(find = one): Promise<string | null> {
+  const r = await getSetting<string | null>("admin_paused_reason", find);
   return r && r !== "null" ? r : null;
 }
 
-async function recordOutcome(outcome: "submitted" | "failed", reason?: string) {
-  if (outcome === "submitted") { await setSetting("admin_failure_streak", 0); return null; }
-  const streak = Number((await getSetting("admin_failure_streak")) ?? 0) + 1;
-  await setSetting("admin_failure_streak", streak);
-  const max = Number((await getSetting("admin_max_failure_streak")) ?? 3);
+async function recordOutcome(outcome: "submitted" | "failed", reason?: string, find = one, execute = q) {
+  if (outcome === "submitted") { await setSetting("admin_failure_streak", 0, execute); return null; }
+  const streak = Number((await getSetting("admin_failure_streak", find)) ?? 0) + 1;
+  await setSetting("admin_failure_streak", streak, execute);
+  const max = Number((await getSetting("admin_max_failure_streak", find)) ?? 3);
   if (streak >= max) {
     const why = `Paused after ${streak} failed applications in a row (last: ${reason ?? "unknown"})`;
-    await setSetting("admin_paused_reason", why);
+    await setSetting("admin_paused_reason", why, execute);
     return why;
   }
   return null;
@@ -81,21 +81,78 @@ export async function adminStatus() {
   return { paused: await pausedReason(), handoffs_waiting_for_vishwa: Number(r?.handoffs ?? 0), submitted_by_autopilot_last_24h: Number(r?.autopilot_24h ?? 0) };
 }
 
+const workerToken = z.string().uuid().optional();
+const platform = z.enum(["claude", "chatgpt"]);
+const checkpoint = z.object({
+  stage: z.enum(["saved_jobs", "scout_search", "applying", "reconcile"]),
+  scout_run_id: z.number().int().positive().optional(),
+  saved_job_ids: z.array(z.string().regex(/^\d+$/)).max(100).optional(),
+});
+
+async function ownsRun(find: typeof one, runId: number, token?: string) {
+  const run = await find("SELECT worker_token, finished_at FROM admin_runs WHERE id = $1 FOR UPDATE", [runId]);
+  return !!run && !run.finished_at && (run.worker_token ?? undefined) === token;
+}
+
 export function registerAdministratorTools(server: McpServer) {
+  server.registerTool("jamie_admin_resume_status", {
+    description: "Read recent unfinished Administrator runs, shared checkpoints and recorded counts without changing ownership.",
+    inputSchema: {},
+  }, async () => {
+    const runs = await q(`SELECT r.id AS run_id, r.started_at, r.cap, r.worker_platform, r.heartbeat_at, r.checkpoint,
+      count(a.id) FILTER (WHERE a.status = 'submitted')::int AS submitted,
+      count(a.id) FILTER (WHERE a.status = 'in_progress')::int AS in_progress
+      FROM admin_runs r LEFT JOIN applications a ON a.run_id = r.id
+      WHERE r.finished_at IS NULL GROUP BY r.id ORDER BY r.id DESC LIMIT 10`);
+    return ok({ runs, paused: await pausedReason(), mass_apps: await massToday() });
+  });
+
+  server.registerTool("jamie_admin_takeover", {
+    description: "Claim an interrupted run on another platform. An expired heartbeat permits takeover after 30 minutes. Set interruption_confirmed only when the user or prior client has confirmed the worker stopped. Reconcile in-progress applications before continuing.",
+    inputSchema: { run_id: z.number().int().positive(), platform, interruption_confirmed: z.boolean().default(false) },
+  }, async ({ run_id, platform, interruption_confirmed }) => {
+    const paused = await pausedReason();
+    if (paused) return ok({ stop: true, reason: paused });
+    const token = randomUUID();
+    const run = await one(`UPDATE admin_runs SET worker_platform = $2, worker_token = $3, heartbeat_at = now()
+      WHERE id = $1 AND finished_at IS NULL AND
+        ((heartbeat_at IS NOT NULL AND heartbeat_at < now() - interval '30 minutes')
+         OR ($4 AND (worker_platform IS NULL OR worker_platform <> $2)))
+      RETURNING id AS run_id, cap, checkpoint`, [run_id, platform, token, interruption_confirmed]);
+    if (!run) return ok({ stop: true, reason: "Run is finished, missing, or still owned by an active worker." });
+    const reconcile = await q(`SELECT id AS application_id, company, role, url FROM applications
+      WHERE run_id = $1 AND status = 'in_progress' ORDER BY id`, [run_id]);
+    return ok({ ...run, worker_token: token, reconcile,
+      next: "Check each in-progress role for a submission receipt. Record confirmed submissions or hand off uncertain cases with jamie_admin_done. Resume Saved jobs first." });
+  });
+
+  server.registerTool("jamie_admin_checkpoint", {
+    description: "Renew the run heartbeat and optionally save the next stage, Scout run ID and pending LinkedIn Saved IDs. Call before each browser application, immediately before submitting, and after recording its outcome.",
+    inputSchema: { run_id: z.number().int().positive(), worker_token: z.string().uuid(), checkpoint: checkpoint.optional() },
+  }, async ({ run_id, worker_token, checkpoint }) => {
+    const run = await one(`UPDATE admin_runs SET heartbeat_at = now(), checkpoint = coalesce($3::jsonb, checkpoint)
+      WHERE id = $1 AND worker_token = $2 AND finished_at IS NULL RETURNING id, heartbeat_at`,
+    [run_id, worker_token, checkpoint ? JSON.stringify(checkpoint) : null]);
+    return ok(run ? { saved: true, ...run } : { stop: true, reason: "Worker no longer owns this run." });
+  });
+
   server.registerTool(
     "jamie_admin_start_run",
     {
       description: "Administrator: start an autopilot run (call first, every time). Returns run_id and the per-run cap, or stop if autopilot paused itself. Also closes out applications a crashed run left half-done (they go to Vishwa to check, never retried).",
-      inputSchema: { trigger: z.string().optional().describe("scheduled, or what Vishwa asked") },
+      inputSchema: { trigger: z.string().optional().describe("scheduled, or what Vishwa asked"), platform: platform.optional() },
     },
-    async ({ trigger }) => {
+    async ({ trigger, platform }) => {
       const paused = await pausedReason();
       if (paused) return ok({ stop: true, reason: paused, fix: "Vishwa checks the failures, then says to unpause (jamie_admin_unpause)" });
       const stale = await q(`UPDATE applications SET status = 'handoff', handoff_reason = 'A run stopped mid-application; check whether it was submitted', updated_at = now()
-        WHERE status = 'in_progress' AND autopilot AND updated_at < now() - interval '2 hours' RETURNING company, role`);
+        WHERE status = 'in_progress' AND autopilot AND updated_at < now() - interval '2 hours'
+        AND NOT EXISTS (SELECT 1 FROM admin_runs r WHERE r.id = applications.run_id AND r.finished_at IS NULL AND r.worker_token IS NOT NULL)
+        RETURNING company, role`);
       const cap = Number((await getSetting("admin_run_cap")) ?? 15);
-      const run = await one("INSERT INTO admin_runs (cap, trigger) VALUES ($1, $2) RETURNING id", [cap, trigger ?? null]);
-      return ok({ run_id: run.id, cap, mass_apps: await massToday(), stale_moved_to_handoff: stale, next: "jamie_admin_queue, then prepare each job with this run_id" });
+      const token = platform ? randomUUID() : null;
+      const run = await one("INSERT INTO admin_runs (cap, trigger, worker_platform, worker_token, heartbeat_at) VALUES ($1, $2, $3, $4, CASE WHEN $4::uuid IS NOT NULL THEN now() END) RETURNING id", [cap, trigger ?? null, platform ?? null, token]);
+      return ok({ run_id: run.id, ...(token ? { worker_token: token } : {}), cap, mass_apps: await massToday(), stale_moved_to_handoff: stale, next: "jamie_admin_queue, then prepare each job with this run_id" });
     }
   );
 
@@ -103,10 +160,14 @@ export function registerAdministratorTools(server: McpServer) {
     "jamie_admin_finish_run",
     {
       description: "Administrator: end a run and get its summary (submitted, answers Jamie wrote, handoffs, failures). Put the summary in the handoff and the final message.",
-      inputSchema: { run_id: z.number().int() },
+      inputSchema: { run_id: z.number().int(), worker_token: workerToken },
     },
-    async ({ run_id }) => {
+    async ({ run_id, worker_token }) => transaction(async ({ q, one }) => {
+      if (!(await ownsRun(one, run_id, worker_token))) return ok({ stop: true, reason: "Worker no longer owns this run." });
       const apps = await q("SELECT id, company, role, url, status, resume_used, handoff_reason, notes FROM applications WHERE run_id = $1 ORDER BY id", [run_id]);
+      if (worker_token && apps.some((app) => app.status === "in_progress")) {
+        return ok({ stop: true, reason: "Reconcile the in-progress application before finishing." });
+      }
       const written = await q(`SELECT a.company, s.question, s.answer FROM submitted_answers s JOIN applications a ON a.id = s.application_id
         JOIN answers w ON w.id = s.answer_id WHERE a.run_id = $1 AND w.question_type = 'written_by_autopilot'`, [run_id]);
       const by = (st: string) => (apps as any[]).filter((a) => a.status === st);
@@ -116,12 +177,13 @@ export function registerAdministratorTools(server: McpServer) {
         failed: by("failed").map((a) => `${a.company}: ${a.role} (${String(a.notes ?? "").split("\n").pop()})`),
         skipped: by("skipped").length,
         written_answers: written,
-        paused: await pausedReason(),
-        mass_apps_today: await massToday(),
+        paused: await pausedReason(one),
+        mass_apps_today: await massToday(one),
       };
-      await q("UPDATE admin_runs SET finished_at = now(), summary = $2 WHERE id = $1", [run_id, JSON.stringify(summary)]);
+      const finished = await one("UPDATE admin_runs SET finished_at = now(), summary = $2 WHERE id = $1 AND finished_at IS NULL AND worker_token IS NOT DISTINCT FROM $3::uuid RETURNING id", [run_id, JSON.stringify(summary), worker_token ?? null]);
+      if (!finished) return ok({ stop: true, reason: "Worker no longer owns this run." });
       return ok(summary);
-    }
+    })
   );
 
   server.registerTool(
@@ -189,29 +251,34 @@ export function registerAdministratorTools(server: McpServer) {
         location: z.string().optional(),
         source: z.string().optional().describe("Where the job was found (LinkedIn, company site...)"),
         run_id: z.number().int().optional().describe("From jamie_admin_start_run"),
+        worker_token: workerToken,
       },
     },
-    async (a) => {
-      const paused = await pausedReason();
+    async (a) => transaction(async ({ q, one }) => {
+      const paused = await pausedReason(one);
       if (paused) return ok({ stop: true, reason: paused });
       if (a.run_id) {
+        if (!(await ownsRun(one, a.run_id, a.worker_token))) return ok({ stop: true, reason: "Worker no longer owns this run." });
         const run = await one("SELECT cap, finished_at FROM admin_runs WHERE id = $1", [a.run_id]);
         if (!run || run.finished_at) return ok({ stop: true, reason: "run not open; call jamie_admin_start_run" });
-        const used = Number((await one("SELECT count(*) n FROM applications WHERE run_id = $1 AND status IN ('submitted','in_progress')", [a.run_id])).n);
+        const counts = await one(`SELECT count(*) FILTER (WHERE status IN ('submitted', 'in_progress'))::int AS used,
+          count(*) FILTER (WHERE status = 'in_progress')::int AS in_progress FROM applications WHERE run_id = $1`, [a.run_id]);
+        if (a.worker_token && counts.in_progress > 0) return ok({ stop: true, reason: "Reconcile the in-progress application before preparing another role." });
+        const used = counts.used;
         if (used >= run.cap) return ok({ stop: true, reason: `run cap reached (${used}/${run.cap}); call jamie_admin_finish_run` });
       }
-      const dup = await findDuplicate(a.company, a.role, a.url);
+      const dup = await findDuplicate(a.company, a.role, a.url, q);
       if (dup) return ok({ skip: true, reason: `already ${dup.status} (application #${dup.id})`, application: dup });
       const tier = a.tier ?? "mass";
       if (tier === "mass") {
-        const m = await massToday();
+        const m = await massToday(one);
         if (m.used >= m.cap) return ok({ stop: true, reason: `daily mass cap reached (${m.used}/${m.cap}); tell Vishwa and stop mass apps for today` });
       }
       const ats = detectAts(a.url);
       const signedIn = await one("SELECT id FROM applications WHERE status = 'retry' AND lower(company) = lower($1) LIMIT 1", [a.company]);
       const pv = pickVariant(a.role, a.job_description ?? "");
       const range = extractSalary(a.job_description ?? "");
-      const autopilot = (await getSetting("admin_autopilot")) !== false;
+      const autopilot = (await getSetting("admin_autopilot", one)) !== false;
       const app = await one(
         `INSERT INTO applications (company, role, url, location, ats, resume_used, tier, status, job_id, jd_text, source, autopilot, run_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,'in_progress',$8,$9,$10,$11,$12) RETURNING id`,
@@ -233,7 +300,7 @@ export function registerAdministratorTools(server: McpServer) {
           ? `Call jamie_admin_done outcome "handoff" with reason "${play.handoff}".`
           : "jamie_admin_resume, upload it, read every field, then jamie_admin_fill with all questions.",
       });
-    }
+    })
   );
 
   server.registerTool(
@@ -254,13 +321,18 @@ export function registerAdministratorTools(server: McpServer) {
       description: "Administrator: send every question on the form (label, type, options, required, max_chars). Code answers all factual ones (contact, links, work authorization, sponsorship, salary, start date, education, EEO, yes/no logistics) and reuses saved answers. Only needs_writing comes back for you to write, using the posting's exact keywords and only facts from the brain.",
       inputSchema: {
         application_id: z.number().int(),
+        worker_token: workerToken,
         questions: z.array(z.object({ label: z.string(), type: z.string().optional(), options: z.array(z.string()).optional(), required: z.boolean().optional(), max_chars: z.number().int().optional() })),
       },
     },
-    async ({ application_id, questions }) => {
-      const app = await one("SELECT * FROM applications WHERE id = $1", [application_id]);
+    async ({ application_id, questions, worker_token }) => transaction(async ({ q, one }) => {
+      const application = await one("SELECT run_id FROM applications WHERE id = $1", [application_id]);
+      if (application?.run_id && !(await ownsRun(one, application.run_id, worker_token))) {
+        return ok({ stop: true, reason: "Worker no longer owns this run." });
+      }
+      const app = await one("SELECT * FROM applications WHERE id = $1 FOR UPDATE", [application_id]);
       if (!app) return ok({ refused: true, reason: "no such application" });
-      const facts = await activeFactIds();
+      const facts = await activeFactIds(q);
       const ctx = { jd: app.jd_text ?? "", source: app.source ?? "LinkedIn" };
       const bank = await q("SELECT id, question, answer, role_type FROM answers WHERE approved AND reusable");
       const filled: (Filled & { answer_id?: number })[] = [];
@@ -290,7 +362,7 @@ export function registerAdministratorTools(server: McpServer) {
           "Run jamie_admin_check on everything you write, fix every problem, then submit",
         ],
       });
-    }
+    })
   );
 
   server.registerTool(
@@ -312,27 +384,38 @@ export function registerAdministratorTools(server: McpServer) {
       description: "Administrator: close out an application. outcome submitted (after the confirmation page shows), handoff (needs a sign-in, account, CAPTCHA, or anything only Vishwa can do), or skipped. For submitted, pass every answer that went in; code re-checks written answers, logs them for Vishwa's review, saves new ones to the answer bank and marks the Scout job applied.",
       inputSchema: {
         application_id: z.number().int(),
+        worker_token: workerToken,
         outcome: z.enum(["submitted", "handoff", "skipped", "failed"]).describe("failed = something broke and it was NOT submitted (counts toward the auto-pause)"),
         answers: z.array(z.object({ question: z.string(), answer: z.string(), source: z.string().describe("standard:*, bank, resume, or written"), answer_id: z.number().int().optional() })).optional(),
         confirmation: z.string().optional().describe("Confirmation text or URL from the ATS"),
         reason: z.string().optional(),
       },
     },
-    async ({ application_id, outcome, answers, confirmation, reason }) => {
-      const app = await one("SELECT * FROM applications WHERE id = $1", [application_id]);
+    async ({ application_id, outcome, answers, confirmation, reason, worker_token }) => transaction(async ({ q, one }) => {
+      const application = await one("SELECT run_id FROM applications WHERE id = $1", [application_id]);
+      if (application?.run_id && !(await ownsRun(one, application.run_id, worker_token))) {
+        return ok({ stop: true, reason: "Worker no longer owns this run." });
+      }
+      const app = await one("SELECT * FROM applications WHERE id = $1 FOR UPDATE", [application_id]);
       if (!app) return ok({ refused: true, reason: "no such application" });
+      if (app.status === "submitted") {
+        return ok({ submitted: application_id, already_recorded: true });
+      }
+      if (worker_token && outcome === "submitted" && !confirmation?.trim()) {
+        return ok({ refused: true, reason: "A submission receipt is required." });
+      }
       if (outcome !== "submitted") {
         await q("UPDATE applications SET status = $2, notes = concat_ws(E'\\n', notes, $3::text), handoff_reason = $4, updated_at = now() WHERE id = $1",
           [application_id, outcome, reason ?? null, outcome === "handoff" ? reason ?? "needs Vishwa" : null]);
         if (outcome === "failed") {
-          const paused = await recordOutcome("failed", reason);
+          const paused = await recordOutcome("failed", reason, one, q);
           return ok({ recorded: "failed", application_id, paused, next: paused ? "Stop the run now: jamie_admin_finish_run" : "Move to the next job" });
         }
         if (app.job_id && outcome === "skipped") await q("UPDATE jobs SET status = 'skipped' WHERE id::text = $1", [app.job_id]);
         return ok({ recorded: outcome, application_id });
       }
       const written = (answers ?? []).filter((a) => a.source === "written");
-      const nums = await brainNumbers();
+      const nums = await brainNumbers(q);
       const bad = written.map((a) => ({ question: a.question, problems: checkAnswer(a.answer, { brainNumbers: nums }) })).filter((r) => r.problems.length);
       if (bad.length) return ok({ refused: true, reason: "written answers still have problems; this should have been fixed before submitting", bad });
       for (const a of (answers ?? []).filter((x) => !x.source.startsWith("standard:") && x.source !== "resume")) {
@@ -345,9 +428,9 @@ export function registerAdministratorTools(server: McpServer) {
       }
       await q("UPDATE applications SET status = 'submitted', submitted_at = now(), notes = concat_ws(E'\\n', notes, $2::text), updated_at = now() WHERE id = $1", [application_id, confirmation ? `Confirmation: ${confirmation}` : null]);
       if (app.job_id) await q("UPDATE jobs SET status = 'applied' WHERE id::text = $1", [app.job_id]);
-      await recordOutcome("submitted");
-      return ok({ submitted: application_id, logged_answers: (answers ?? []).length, written_answers_for_vishwa_to_review: written.length, mass_apps: await massToday() });
-    }
+      await recordOutcome("submitted", undefined, one, q);
+      return ok({ submitted: application_id, logged_answers: (answers ?? []).length, written_answers_for_vishwa_to_review: written.length, mass_apps: await massToday(one) });
+    })
   );
 
   server.registerTool(

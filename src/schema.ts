@@ -321,6 +321,10 @@ CREATE TABLE IF NOT EXISTS admin_runs (
   summary JSONB
 );
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS run_id INT;
+ALTER TABLE admin_runs ADD COLUMN IF NOT EXISTS worker_platform TEXT;
+ALTER TABLE admin_runs ADD COLUMN IF NOT EXISTS worker_token UUID;
+ALTER TABLE admin_runs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ;
+ALTER TABLE admin_runs ADD COLUMN IF NOT EXISTS checkpoint JSONB;
 INSERT INTO settings (key, value) VALUES ('admin_run_cap', '15') ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('admin_max_failure_streak', '3') ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('admin_failure_streak', '0') ON CONFLICT (key) DO NOTHING;
